@@ -55,7 +55,7 @@ const getBOM = (cat) => BOM[cat] || BOM.default;
 async function reason(tool, issue, fallback, { live } = {}) {
   if (!ai || !live) return fallback;
   try {
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: SYSTEM });
+    const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash', systemInstruction: SYSTEM });
     const prompt = `Issue #${issue.id}: ${issue.category} (${issue.severity}) in ${issue.ward}, ${issue.citizensAffected || 1} citizens affected, ₹${issue.costOfInaction}/day cost of inaction.
 You are about to run the tool "${tool}". In ONE sentence (max 22 words), state your reasoning for this action. No preamble.`;
     const r = await model.generateContent(prompt);

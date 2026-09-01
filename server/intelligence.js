@@ -184,7 +184,7 @@ export async function generateDailyBrief(issues) {
 
   if (!ai) return fallback;
   try {
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json' } });
+    const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash', generationConfig: { responseMimeType: 'application/json' } });
     const prompt = `You are the Nidaan municipal chief-of-staff. Write the official's morning brief as JSON
 {"headline": string, "bullets": string[4], "priorities": string[3]} from these facts:
 ${JSON.stringify(facts)}
