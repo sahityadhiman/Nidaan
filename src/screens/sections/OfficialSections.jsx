@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, TrendingUp, IndianRupee, CheckCircle2, ListChecks, Activity, MousePointerClick, MapPin, ShieldCheck } from 'lucide-react';
 import { useAppData } from '../../app/AppDataContext.jsx';
 import { useRole } from '../../app/RoleContext.jsx';
+import { useLanguage } from '../../app/LanguageContext.jsx';
 import LoopPipeline from '../../components/LoopPipeline.jsx';
 import AgentActivityPanel from '../../components/AgentActivityPanel.jsx';
 import LedgerTimeline from '../../components/LedgerTimeline.jsx';
@@ -29,6 +30,7 @@ function useCountUp(target, duration = 900) {
 
 /* 1 — Command Overview (detailed list of active issues with progress and individual risks) */
 export function OfficialOverview() {
+  const { t } = useLanguage();
   const { issues, setSelectedIssue } = useAppData();
   const { navigate } = useRole();
   const [filter, setFilter] = useState('report');
@@ -319,7 +321,7 @@ export function OfficialOverview() {
                   </div>
 
                   <h3 style={{ fontSize: '0.98rem', fontWeight: 800, margin: 0, textTransform: 'capitalize', color: 'var(--ink-strong)' }}>
-                    {issue.title || issue.category.replace('_', ' ')}
+                    {t(issue.title || issue.category.replace('_', ' '))}
                   </h3>
 
                   <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>

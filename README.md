@@ -185,3 +185,38 @@ Verified Resolution
    │
    ▼
 Prevention & Civic Insights
+```
+
+## ⏱️ Report target times
+
+New reports get a target time based on severity: RedAlert 4 hours, high 12 hours,
+medium 48 hours, and low 72 hours. Fire and wiring reports are treated as RedAlert.
+The citizen report screen shows the target and countdown. When an open report passes
+its target, Nidaan marks it overdue in the case history. Municipal officials see a
+friendly in-app reminder before the deadline: 1 hour for RedAlert, 3 hours for high,
+12 hours for medium, and 24 hours for low severity. These reminders appear on the
+Pressure dashboard and do not send email or text messages.
+
+### Keep the overdue check running on Render
+
+The app checks overdue reports automatically while running locally. For a deployed
+Render service, use a Render Cron Job to call the protected monitor endpoint every
+five minutes:
+
+1. Create a long random token (you can run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+2. Add `SLA_MONITOR_TOKEN` with that value to the Nidaan web service's environment variables.
+3. Create a Render Cron Job using the same repository and branch. Set its schedule to `*/5 * * * *`.
+4. Give the Cron Job these environment variables: `NIDAAN_BASE_URL` set to your deployed app URL
+   without a trailing slash, and `SLA_MONITOR_TOKEN` set to the same token.
+5. Set its command to:
+
+   ```bash
+   curl --fail --silent --show-error --request POST \
+     --header "Authorization: Bearer $SLA_MONITOR_TOKEN" \
+     "$NIDAAN_BASE_URL/api/sla/monitor"
+   ```
+
+The monitor only records overdue status in Nidaan. It does not contact government
+offices or send emails. The separate `/api/sla/sweep` workflow is not called by this
+scheduled check. Render Cron Jobs use UTC for their schedule and can be configured
+with environment variables in the dashboard.

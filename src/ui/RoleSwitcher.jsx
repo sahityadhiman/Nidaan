@@ -3,6 +3,7 @@ import { ChevronDown, Check, Compass, PlayCircle, Home } from 'lucide-react';
 import { ROLES, roleById } from '../config/nav.js';
 import { useRole } from '../app/RoleContext.jsx';
 import { useTour } from '../tour/TourContext.jsx';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 /*
   RoleSwitcher — persistent top-right pill. Switching roles never resets the
@@ -12,6 +13,7 @@ import { useTour } from '../tour/TourContext.jsx';
 export default function RoleSwitcher() {
   const { role, switchRole, goToRoleSelect } = useRole();
   const tour = useTour();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const current = roleById(role);
@@ -65,7 +67,7 @@ export default function RoleSwitcher() {
         }}>
           <CurrentIcon size={14} />
         </span>
-        <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em' }}>{current.name}</span>
+        <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em' }}>{t(current.name)}</span>
         <ChevronDown size={15} color="rgba(241, 245, 249, 0.8)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--transition-fast)' }} />
       </button>
 
@@ -82,7 +84,7 @@ export default function RoleSwitcher() {
           }}
         >
           <div style={{ fontSize: '0.64rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-muted)', padding: '0.4rem 0.6rem 0.2rem' }}>
-            Switch role
+            {t('Switch role')}
           </div>
           {ROLES.map(r => {
             const Icon = r.icon; const active = r.id === role;
@@ -91,7 +93,7 @@ export default function RoleSwitcher() {
                 <span style={{ width: '26px', height: '26px', borderRadius: '50%', background: r.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon size={14} />
                 </span>
-                <span style={{ flex: 1 }}>{r.name}</span>
+                <span style={{ flex: 1 }}>{t(r.name)}</span>
                 {active && <Check size={15} color="var(--teal-600)" />}
               </button>
             );
@@ -100,10 +102,10 @@ export default function RoleSwitcher() {
           <div style={{ height: '1px', background: 'var(--cream-300)', margin: '0.35rem 0.3rem' }} />
 
           <button role="menuitem" style={itemStyle(false)} onClick={() => { setOpen(false); tour?.start(); }}>
-            <PlayCircle size={17} color="var(--teal)" /> Restart Guided Tour
+            <PlayCircle size={17} color="var(--teal)" /> {t('Restart Guided Tour')}
           </button>
           <button role="menuitem" style={itemStyle(false)} onClick={() => { setOpen(false); goToRoleSelect(); }}>
-            <Home size={17} color="var(--ink-muted)" /> Back to Role Select
+            <Home size={17} color="var(--ink-muted)" /> {t('Back to Role Select')}
           </button>
         </div>
       )}

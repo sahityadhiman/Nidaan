@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ThumbsUp, CheckCircle, Circle, FileText, Download, Star, Users, ShieldCheck, ArrowRight, ChevronDown, ChevronUp, XCircle, AlertTriangle, Link2 } from 'lucide-react';
+import { ThumbsUp, CheckCircle, Circle, FileText, Download, Star, Users, ShieldCheck, ArrowRight, ChevronDown, ChevronUp, XCircle, AlertTriangle, Link2, Clock } from 'lucide-react';
 import { useAppData } from '../../app/AppDataContext.jsx';
 import { useRole } from '../../app/RoleContext.jsx';
+import { useLanguage } from '../../app/LanguageContext.jsx';
 import SnapToSolve from '../../components/SnapToSolve.jsx';
 import LoopPipeline, { issueProgress, STAGES } from '../../components/LoopPipeline.jsx';
 import AgentActivityPanel from '../../components/AgentActivityPanel.jsx';
@@ -18,13 +19,42 @@ const FIXED_FALLBACK = {
 };
 const fixedFallbackFor = (category) => FIXED_FALLBACK[category] || FIXED_FALLBACK.pothole;
 
-const EmptyState = ({ icon: Icon, title, body }) => (
-  <div className="glass-panel" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
+const formatDuration = (milliseconds, language = 'en') => {
+  const hours = Math.max(1, Math.ceil(milliseconds / 3600000));
+  if (hours < 24) return language === 'hi' ? `${hours} घंटे` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  if (language === 'hi') return remainingHours ? `${days} दिन ${remainingHours} घंटे` : `${days} दिन`;
+  return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
+};
+
+const getDeadlineDisplay = (issue, now, language = 'en') => {
+  if (!issue.slaDeadline) return null;
+  const deadline = new Date(issue.slaDeadline);
+  if (Number.isNaN(deadline.getTime())) return null;
+
+  const deadlineText = deadline.toLocaleString(language === 'hi' ? 'hi-IN' : 'en-IN', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+  if (issue.status === 'verified') {
+    return { text: language === 'hi' ? `लक्ष्य समय ${deadlineText} था · पूरा हुआ` : `Target was ${deadlineText} · Resolved`, resolved: true, overdue: false };
+  }
+
+  const difference = deadline.getTime() - now;
+  if (difference <= 0) {
+    return { text: language === 'hi' ? `समय सीमा ${deadlineText} निकल गई · ${formatDuration(-difference, language)} की देरी` : `Target missed ${deadlineText} · overdue ${formatDuration(-difference, language)}`, resolved: false, overdue: true };
+  }
+  return { text: language === 'hi' ? `समाधान का लक्ष्य ${deadlineText} · ${formatDuration(difference, language)} बाकी` : `Fix target ${deadlineText} · ${formatDuration(difference, language)} left`, resolved: false, overdue: false };
+};
+
+const EmptyState = ({ icon: Icon, title, body }) => {
+  const { t } = useLanguage();
+  return <div className="glass-panel" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
     {Icon && <Icon size={40} style={{ color: 'var(--teal)', margin: '0 auto 0.75rem' }} />}
-    <h3 style={{ fontSize: '1.05rem' }}>{title}</h3>
-    {body && <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginTop: '0.4rem' }}>{body}</p>}
-  </div>
-);
+    <h3 style={{ fontSize: '1.05rem' }}>{t(title)}</h3>
+    {body && <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginTop: '0.4rem' }}>{t(body)}</p>}
+  </div>;
+};
 
 /* 1 — Report an Issue */
 export function CitizenReport() {
@@ -46,12 +76,19 @@ export function CitizenReport() {
 
 /* 2 — My Reports */
 export function CitizenMyReports() {
+  const { t, language } = useLanguage();
   const {
     issues, citizen, heroIssue, selectedIssue, setSelectedIssue,
     handleTriggerAgent, handleRunAgent, handleReleaseEscrow, agentLoading,
     users
   } = useAppData();
   const [trackingIssueId, setTrackingIssueId] = useState(selectedIssue?.id || null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (selectedIssue) {
@@ -73,6 +110,7 @@ export function CitizenMyReports() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {list.map(issue => {
             const stage = STAGES[Math.min(STAGES.length, issueProgress(issue)) - 1];
+            const deadline = getDeadlineDisplay(issue, now, language);
             const isHero = heroIssue && issue.id === heroIssue.id;
             const isTracking = trackingIssueId === issue.id;
             return (
@@ -86,10 +124,22 @@ export function CitizenMyReports() {
                   <img src={issue.photoUrl} alt={issue.category} style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                      <h3 style={{ fontSize: '1rem', textTransform: 'capitalize' }}>{(issue.title || issue.category.replace('_', ' '))}</h3>
-                      <span className="badge badge-info" style={{ textTransform: 'capitalize' }}>{stage?.label || issue.status}</span>
+                      <h3 style={{ fontSize: '1rem', textTransform: 'capitalize' }}>{t(issue.title || issue.category.replace('_', ' '))}</h3>
+                    <span className="badge badge-info" style={{ textTransform: 'capitalize' }}>{t(stage?.label || issue.status)}</span>
                     </div>
                     <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>#{issue.id} · {issue.ward}</p>
+                    {deadline && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.45rem',
+                        padding: '0.45rem 0.6rem', borderRadius: 'var(--radius-ctl)', fontSize: '0.75rem', fontWeight: 600,
+                        background: deadline.overdue ? 'var(--critical-tint)' : deadline.resolved ? 'var(--grass-tint)' : 'var(--teal-tint)',
+                        color: deadline.overdue ? 'var(--critical)' : deadline.resolved ? 'var(--grass-600)' : 'var(--teal-600)',
+                        border: `1px solid ${deadline.overdue ? 'rgba(var(--critical-rgb),.2)' : deadline.resolved ? 'rgba(var(--grass-rgb),.2)' : 'rgba(var(--brand-rgb),.2)'}`
+                      }}>
+                        <Clock size={13} />
+                        <span>{deadline.text}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -124,9 +174,9 @@ export function CitizenMyReports() {
                     style={{ fontSize: '0.78rem', padding: '0.45rem 0.8rem' }}
                   >
                     {isTracking ? (
-                      <>Hide agent activity <ChevronUp size={14} /></>
+                      <>{t('Hide agent activity')} <ChevronUp size={14} /></>
                     ) : (
-                      <>Watch the agent <ChevronDown size={14} /></>
+                      <>{t('Watch the agent')} <ChevronDown size={14} /></>
                     )}
                   </button>
                 </div>
@@ -138,7 +188,7 @@ export function CitizenMyReports() {
 
       {/* Reporter reputation leaderboard */}
       <div className="glass-panel" style={{ padding: '1.25rem' }}>
-        <h3 style={{ fontSize: '1.05rem', marginBottom: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Star size={17} color="var(--alert)" /> Top trusted reporters</h3>
+        <h3 style={{ fontSize: '1.05rem', marginBottom: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Star size={17} color="var(--alert)" /> {t('Top trusted reporters')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: '0.75rem' }}>
           {topCitizens.map((u, i) => (
             <div key={u.id} className="sunken" style={{ padding: '0.8rem', borderRadius: 'var(--radius-ctl)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -150,7 +200,7 @@ export function CitizenMyReports() {
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--ink-muted)' }}>
-                <span>⭐ Trust {u.trustScore}</span><span>{u.confirmedFixes} confirms</span>
+                <span>⭐ {t('Trust')} {u.trustScore}</span><span>{u.confirmedFixes} {t('confirms')}</span>
               </div>
               <div style={{ height: '5px', background: 'var(--cream-300)', borderRadius: '99px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${u.trustScore}%`, background: 'var(--gradient-secondary)', borderRadius: '99px' }} />
@@ -159,7 +209,7 @@ export function CitizenMyReports() {
           ))}
         </div>
         <p style={{ fontSize: '0.72rem', color: 'var(--ink-muted)', marginTop: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Link2 size={12} color="var(--teal)" /> Trusted reporters are weighted higher in dedupe & verification. Account age + confirmation rate resist Sybil gaming.
+          <Link2 size={12} color="var(--teal)" /> {t('Trusted reporters are weighted higher in dedupe & verification. Account age + confirmation rate resist Sybil gaming.')}
         </p>
       </div>
     </div>
@@ -169,6 +219,7 @@ const ListIcon = (props) => <FileText {...props} />;
 
 /* 3 — Confirm a Fix */
 export function CitizenConfirmFix() {
+  const { t } = useLanguage();
   const { issues, heroIssue, showToast, handleReportFailure } = useAppData();
   const [confirmed, setConfirmed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -194,18 +245,18 @@ export function CitizenConfirmFix() {
     <div data-tour-id="tour-confirm" className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '620px' }}>
       <div>
         <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)', fontFamily: 'var(--font-mono)' }}>#{target.id} · {target.ward}</span>
-        <h3 style={{ fontSize: '1.1rem', textTransform: 'capitalize' }}>{target.title || target.category.replace('_', ' ')} — repair completed</h3>
+        <h3 style={{ fontSize: '1.1rem', textTransform: 'capitalize' }}>{t(target.title || target.category.replace('_', ' '))} — {t('repair completed')}</h3>
       </div>
 
       <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <span className="badge badge-danger" style={{ alignSelf: 'flex-start' }}>Before</span>
-          <img src={target.photoUrl} alt="Before" style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)' }} />
+          <span className="badge badge-danger" style={{ alignSelf: 'flex-start' }}>{t('Before')}</span>
+          <img src={target.photoUrl} alt={t('Before')} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)' }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <span className="badge badge-success" style={{ alignSelf: 'flex-start' }}>After</span>
-          <img src={target.proofOfFixUrl || fixedFallbackFor(target.category)} alt="After" style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)' }} />
+          <span className="badge badge-success" style={{ alignSelf: 'flex-start' }}>{t('After')}</span>
+          <img src={target.proofOfFixUrl || fixedFallbackFor(target.category)} alt={t('After')} style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)' }} />
         </div>
       </div>
 
@@ -213,18 +264,18 @@ export function CitizenConfirmFix() {
         {locks.map((l, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', background: l.pass ? 'var(--grass-tint)' : 'var(--cream-200)', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-ctl)', border: `1px solid ${l.pass ? 'rgba(var(--grass-rgb),.3)' : 'var(--cream-400)'}` }}>
             {l.pass ? <CheckCircle size={16} color="var(--grass-600)" /> : <Circle size={16} color="var(--ink-muted)" />}
-            <span><strong style={{ color: 'var(--ink-strong)' }}>{l.label}</strong> — <span style={{ color: 'var(--ink-muted)' }}>{l.note}</span></span>
+            <span><strong style={{ color: 'var(--ink-strong)' }}>{t(l.label)}</strong> — <span style={{ color: 'var(--ink-muted)' }}>{t(l.note)}</span></span>
           </div>
         ))}
       </div>
 
       {denied ? (
         <div className="badge badge-danger" style={{ alignSelf: 'flex-start', padding: '0.6rem 0.9rem', fontSize: '0.82rem' }}>
-          <AlertTriangle size={15} /> Rejection logged. Issue auto-reopened, penalty applied to contractor rating.
+          <AlertTriangle size={15} /> {t('Rejection logged. Issue auto-reopened, penalty applied to contractor rating.')}
         </div>
       ) : confirmed ? (
         <div className="badge badge-success" style={{ alignSelf: 'flex-start', padding: '0.6rem 0.9rem', fontSize: '0.82rem' }}>
-          <ShieldCheck size={15} /> Thank you — repair confirmed. Your trust score rose.
+          <ShieldCheck size={15} /> {t('Thank you — repair confirmed. Your trust score rose.')}
         </div>
       ) : showDenyForm ? (
         <form onSubmit={async (e) => {
@@ -242,40 +293,40 @@ export function CitizenConfirmFix() {
           }
         }} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink)' }}>Specify why the issue is not fixed:</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink)' }}>{t('Specify why the issue is not fixed:')}</label>
             <textarea
               className="field"
               value={denyReason}
               onChange={(e) => setDenyReason(e.target.value)}
-              placeholder="e.g., The road is still flooded / Contractor only patched half the pothole..."
+              placeholder={t('e.g., The road is still flooded / Contractor only patched half the pothole...')}
               style={{ height: '70px', resize: 'none', fontSize: '0.85rem' }}
               required
             />
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="submit" className="glow-btn-primary" style={{ background: 'var(--critical)', fontSize: '0.85rem' }} disabled={submitting}>
-              {submitting ? 'Submitting Rejection…' : 'Submit Rejection & Reopen'}
+              {submitting ? t('Submitting Rejection…') : t('Submit Rejection & Reopen')}
             </button>
             <button type="button" onClick={() => setShowDenyForm(false)} className="glow-btn-secondary" style={{ fontSize: '0.85rem' }}>
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         </form>
       ) : (
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button
-            onClick={() => { setConfirmed(true); showToast('Repair confirmed — your trust score rose +2.', 'success'); }}
+            onClick={() => { setConfirmed(true); showToast(t('Repair confirmed — your trust score rose +2.'), 'success'); }}
             className="glow-btn-primary"
             style={{ fontSize: '0.9rem' }}
           >
-            <CheckCircle size={16} /> Approve — yes, it's fixed
+            <CheckCircle size={16} /> {t("Approve — yes, it's fixed")}
           </button>
           <button
             onClick={() => setShowDenyForm(true)}
             className="glow-btn-secondary"
             style={{ border: '1px solid var(--critical-border)', color: 'var(--critical)', fontSize: '0.9rem' }}
           >
-            <XCircle size={16} color="var(--critical)" /> Deny — no, it's not fixed
+            <XCircle size={16} color="var(--critical)" /> {t("Deny — no, it's not fixed")}
           </button>
         </div>
       )}
@@ -285,22 +336,39 @@ export function CitizenConfirmFix() {
 
 /* 4 — My Voice */
 export function CitizenMyVoice() {
+  const { t, language } = useLanguage();
   const { citizen, users, issues } = useAppData();
   const me = users.find(u => u.id === citizen.userId) || { trustScore: citizen.trustScore, badge: citizen.badge, reports: 41, confirmedFixes: 28 };
   const petitionIssue = issues.find(i => i.petition);
   const rtiTarget = issues.filter(i => i.status !== 'verified').sort((a, b) => (b.costOfInaction || 0) - (a.costOfInaction || 0))[0];
 
-  const buildRTI = (issue) => `MEMORANDUM OF GRIEVANCE
+  const buildRTI = (issue) => {
+    const targetHours = issue.slaTargetHours || ({ RedAlert: 4, high: 12, medium: 48, low: 72 }[issue.severity] || 48);
+    const category = t(issue.category.replace('_', ' '));
+    const filedDate = new Date(issue.timestamp).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN');
+    if (language === 'hi') {
+      return `शिकायत ज्ञापन
+प्रति: लोक निर्माण विभाग / नगर शिकायत प्रकोष्ठ
+विषय: अनसुलझी सार्वजनिक समस्या — समय सीमा पार (टिकट #${issue.id})
+वार्ड: ${issue.ward}
+
+सूचना का अधिकार अधिनियम की धारा 6 के तहत इस नागरिक समस्या पर जानकारी माँगी जा रही है: ${category}, जो ${filedDate} को दर्ज हुई।
+
+${issue.citizensAffected} प्रभावित नागरिकों की शिकायत के बावजूद विभाग ने ${targetHours} घंटे की निर्धारित समय सीमा में समस्या हल नहीं की।
+
+देरी से रोज़ का आर्थिक नुकसान: ₹${issue.costOfInaction}. कृपया इस शिकायत को सार्वजनिक रिकॉर्ड में दर्ज करें और 30 दिनों के भीतर तारीख सहित कार्रवाई की योजना दें।`;
+    }
+    return `MEMORANDUM OF GRIEVANCE
 TO: Public Works Department / Municipal Grievance Cell
 SUBJECT: Unresolved Public Hazard — SLA Breach (Ticket #${issue.id})
 WARD: ${issue.ward}
 
-Formal notification under Section 6 of the RTI Act regarding the unresolved civic issue: ${issue.category.replace('_', ' ').toUpperCase()} reported on ${new Date(issue.timestamp).toLocaleDateString()}.
+Formal notification under Section 6 of the RTI Act regarding the unresolved civic issue: ${category.toUpperCase()} reported on ${filedDate}.
 
-Despite a community pressure rating of ${issue.citizensAffected} affected citizens, the department failed to resolve within ${issue.severity === 'RedAlert' ? '4 hours' : '48 hours'}.
+Despite a community pressure rating of ${issue.citizensAffected} affected citizens, the department failed to resolve within ${targetHours} hours.
 
 Daily economic cost of inaction: ₹${issue.costOfInaction}. Please register this in the public audit ledger and provide a dated action plan within 30 days as mandated.`;
-
+  };
   const downloadRTI = () => {
     if (!rtiTarget) return;
     const blob = new Blob([buildRTI(rtiTarget)], { type: 'text/plain;charset=utf-8' });
@@ -324,7 +392,9 @@ Daily economic cost of inaction: ₹${issue.costOfInaction}. Please register thi
             <span className="badge badge-info"><Star size={11} color="var(--alert)" /> {me.badge}</span>
           </div>
           <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', marginTop: '0.2rem' }}>
-            {me.reports} reports · {me.confirmedFixes} confirmed fixes. Trusted reporters are weighted higher in dedupe & verification.
+            {language === 'hi'
+              ? `${me.reports} शिकायतें · ${me.confirmedFixes} मरम्मत की पुष्टि। पुष्टि करने वाले नागरिकों की शिकायतों पर जाँच में ज़्यादा भरोसा किया जाता है।`
+              : `${me.reports} reports · ${me.confirmedFixes} confirmed fixes. Trusted reporters are weighted higher in dedupe & verification.`}
           </p>
           <div style={{ height: '7px', background: 'var(--cream-300)', borderRadius: '99px', overflow: 'hidden', marginTop: '0.6rem' }}>
             <div style={{ height: '100%', width: `${me.trustScore}%`, background: 'var(--gradient-secondary)', borderRadius: '99px' }} />
@@ -333,18 +403,18 @@ Daily economic cost of inaction: ₹${issue.costOfInaction}. Please register thi
       </div>
       {/* Group petition */}
       <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        <h3 style={{ fontSize: '1.0rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Users size={17} color="var(--teal)" /> Collective petition</h3>
+        <h3 style={{ fontSize: '1.0rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Users size={17} color="var(--teal)" /> {t('Collective petition')}</h3>
         {petitionIssue?.petition ? (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink-strong)' }}>{petitionIssue.petition.title}</span>
-              <span className="badge badge-info">{petitionIssue.petition.signatures} signatures</span>
+              <span className="badge badge-info">{petitionIssue.petition.signatures} {t('signatures')}</span>
             </div>
             <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{petitionIssue.petition.body}</p>
           </>
         ) : (
           <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-            No active petition you've joined. When enough citizens report the same issue, Nidaan auto-assembles a group petition you can sign.
+            {t("No active petition you've joined. When enough citizens report the same issue, Nidaan auto-assembles a group petition you can sign.")}
           </p>
         )}
       </div>
@@ -352,18 +422,19 @@ Daily economic cost of inaction: ₹${issue.costOfInaction}. Please register thi
       {/* RTI */}
       <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <h3 style={{ fontSize: '1.0rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><FileText size={17} color="var(--teal)" /> Auto-file an RTI</h3>
+          <h3 style={{ fontSize: '1.0rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><FileText size={17} color="var(--teal)" /> {t('Auto-file an RTI')}</h3>
           <button onClick={downloadRTI} disabled={!rtiTarget} className="glow-btn-primary" style={{ fontSize: '0.8rem', padding: '0.5rem 0.9rem' }}>
-            <Download size={14} /> Generate RTI draft
+            <Download size={14} /> {t('Generate RTI draft')}
           </button>
         </div>
         {rtiTarget ? (
           <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
-            When the system stalls, generate a ready-to-file RTI grievance for the highest-pressure open issue
-            (<strong style={{ color: 'var(--ink)' }}>#{rtiTarget.id} · {rtiTarget.category.replace('_', ' ')}</strong>, ₹{rtiTarget.costOfInaction}/day).
+            {language === 'hi'
+              ? <>काम में देरी होने पर सबसे ज़रूरी खुली शिकायत के लिए RTI तैयार करें (<strong style={{ color: 'var(--ink)' }}>#{rtiTarget.id} · {rtiTarget.category.replace('_', ' ')}</strong>, ₹{rtiTarget.costOfInaction}/दिन)।</>
+              : <>When the system stalls, generate a ready-to-file RTI grievance for the highest-pressure open issue (<strong style={{ color: 'var(--ink)' }}>#{rtiTarget.id} · {rtiTarget.category.replace('_', ' ')}</strong>, ₹{rtiTarget.costOfInaction}/day).</>}
           </p>
         ) : (
-          <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>Nothing stalled right now — the loop is clean.</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>{t('Nothing stalled right now — the loop is clean.')}</p>
         )}
       </div>
     </div>
@@ -372,6 +443,7 @@ Daily economic cost of inaction: ₹${issue.costOfInaction}. Please register thi
 
 /* 2.5 — Nearby Active Reports */
 export function CitizenNearbyReports() {
+  const { t } = useLanguage();
   const { issues, handleVoteIssue, setSelectedIssue } = useAppData();
   const { navigate } = useRole();
 
@@ -383,9 +455,9 @@ export function CitizenNearbyReports() {
   return (
     <div className="glass-zone" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink-strong)' }}>Nearby active reports</h2>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink-strong)' }}>{t('Nearby active reports')}</h2>
         <p style={{ fontSize: '0.9rem', color: 'var(--ink)', opacity: 0.78, marginTop: '0.3rem' }}>
-          Upvote issues in your neighborhood to apply collective pressure and accelerate resolution.
+          {t('Upvote issues in your neighborhood to apply collective pressure and accelerate resolution.')}
         </p>
       </div>
       <LivePressureDashboard

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Activity, Play, FastForward, ChevronRight, Check, Cpu, Lock, Unlock } from 'lucide-react';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 // Derive a tool name / service badge / tone from a ledger entry,
 // preferring the explicit fields the orchestrator now writes.
@@ -37,14 +38,15 @@ const TONE = {
 };
 
 function StepCard({ trail, isLast }) {
+  const { t: translate } = useLanguage();
   const { tool, service, tone } = describeStep(trail);
   const [open, setOpen] = useState(false);
-  const t = TONE[tone];
+  const toneStyle = TONE[tone];
 
   return (
     <div style={{ position: 'relative', paddingLeft: '0.25rem' }}>
       <div style={{
-        background: 'var(--cream-50)', border: '1px solid var(--cream-300)', borderLeft: `3px solid ${t.bar}`,
+        background: 'var(--cream-50)', border: '1px solid var(--cream-300)', borderLeft: `3px solid ${toneStyle.bar}`,
         borderRadius: '0 var(--radius-ctl) var(--radius-ctl) 0', padding: '0.6rem 0.75rem',
         display: 'flex', flexDirection: 'column', gap: '0.3rem', animation: 'slideInUp 0.3s ease-out both', boxShadow: 'var(--shadow-soft)',
       }}>
@@ -56,7 +58,7 @@ function StepCard({ trail, isLast }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--ink-muted)', marginTop: '1px' }}>out:</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--ink-muted)', marginTop: '1px' }}>{translate('out:')}</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--ink)', lineHeight: 1.45, flex: 1 }}>{trail.message}</span>
         </div>
 
@@ -75,7 +77,7 @@ function StepCard({ trail, isLast }) {
           <>
             <button onClick={() => setOpen(o => !o)} className="glow-btn-ghost" style={{ fontSize: '0.64rem', padding: 0, marginTop: '0.1rem', alignSelf: 'flex-start' }}>
               <ChevronRight size={11} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform var(--transition-fast)' }} />
-              {open ? 'hide reasoning' : 'view reasoning'}
+              {open ? translate('hide reasoning') : translate('view reasoning')}
             </button>
             {open && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--ink)', background: 'var(--teal-tint)', border: '1px dashed rgba(var(--brand-rgb),.4)', borderRadius: '8px', padding: '0.5rem', lineHeight: 1.5 }}>
@@ -91,6 +93,7 @@ function StepCard({ trail, isLast }) {
 }
 
 export default function AgentActivityPanel({ issue, onTriggerAgent, onRunAgent, onReleaseEscrow, loading }) {
+  const { t } = useLanguage();
   const endRef = useRef(null);
   useEffect(() => { if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' }); }, [issue?.ledgerTrail, loading]);
 
@@ -107,10 +110,10 @@ export default function AgentActivityPanel({ issue, onTriggerAgent, onRunAgent, 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Activity size={17} color="var(--teal)" />
           <div style={{ lineHeight: 1.1 }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--ink-strong)', fontFamily: 'var(--font-display)' }}>Resolution Orchestrator</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--ink-strong)', fontFamily: 'var(--font-display)' }}>{t('Resolution Orchestrator')}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
               <span className="pulsing-indicator" style={{ width: '7px', height: '7px' }} />
-              <span style={{ fontSize: '0.68rem', color: 'var(--teal-600)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{loading ? 'reasoning…' : 'running'}</span>
+              <span style={{ fontSize: '0.68rem', color: 'var(--teal-600)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{loading ? t('reasoning…') : t('running')}</span>
             </div>
           </div>
         </div>
@@ -122,22 +125,22 @@ export default function AgentActivityPanel({ issue, onTriggerAgent, onRunAgent, 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', fontSize: '0.78rem' }}>
             <div style={{ flex: 1, lineHeight: 1.2 }}>
               <span style={{ fontWeight: 700, color: 'var(--ink-strong)', fontFamily: 'var(--font-mono)' }}>#{issue.id}</span>
-              <span style={{ color: 'var(--ink-muted)' }}> · {issue.category.replace('_', ' ')}</span>
+              <span style={{ color: 'var(--ink-muted)' }}> · {t(issue.category.replace('_', ' '))}</span>
             </div>
-            <span className={`badge ${terminal ? 'badge-success' : 'badge-info'}`} style={{ textTransform: 'uppercase' }}>{issue.status.replace('_', ' ')}</span>
+            <span className={`badge ${terminal ? 'badge-success' : 'badge-info'}`} style={{ textTransform: 'uppercase' }}>{t(issue.status.replace('_', ' '))}</span>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', padding: '0 1rem 0.7rem' }}>
             <button onClick={() => onRunAgent(issue.id)} disabled={loading || terminal} className="glow-btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '0.45rem', fontSize: '0.78rem' }}>
-              <FastForward size={13} fill="currentColor" /> Run full resolution
+              <FastForward size={13} fill="currentColor" /> {t('Run full resolution')}
             </button>
             <button onClick={() => onTriggerAgent(issue.id)} disabled={loading || terminal} className="glow-btn-secondary" style={{ justifyContent: 'center', padding: '0.45rem 0.7rem', fontSize: '0.78rem' }}>
-              <Play size={12} fill="currentColor" /> Step
+              <Play size={12} fill="currentColor" /> {t('Step')}
             </button>
           </div>
         </div>
       ) : (
         <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--cream-300)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--ink-muted)', background: 'var(--cream-50)' }}>
-          Select a case from the War Room to trace its orchestration.
+          {t('Select a case from the War Room to trace its orchestration.')}
         </div>
       )}
 
@@ -147,16 +150,16 @@ export default function AgentActivityPanel({ issue, onTriggerAgent, onRunAgent, 
           trail.map((tr, i) => <StepCard key={i} trail={tr} isLast={i === trail.length - 1 && !loading && !showApprove && !payoutReady} />)
         ) : (
           <div style={{ color: 'var(--ink-muted)', padding: '1.5rem 0.5rem', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-            Awaiting orchestration<span className="terminal-cursor" />
+            {t('Awaiting orchestration')}<span className="terminal-cursor" />
           </div>
         )}
 
         {/* Human-in-the-loop checkpoint at assign */}
         {showApprove && !loading && (
           <div style={{ marginLeft: '0.25rem', marginTop: '0.25rem', background: 'var(--teal-tint)', border: '1px solid rgba(var(--brand-rgb),.3)', borderRadius: 'var(--radius-ctl)', padding: '0.6rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ flex: 1, fontSize: '0.72rem', color: 'var(--ink)', fontWeight: 600 }}>Human checkpoint — approve the agent's next action.</span>
-            <button onClick={() => onTriggerAgent(issue.id)} className="glow-btn-primary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem' }}>Approve</button>
-            <button onClick={() => alert('Override: reassign the winning bid or inspector from the FixForce console.')} className="glow-btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem' }}>Override</button>
+            <span style={{ flex: 1, fontSize: '0.72rem', color: 'var(--ink)', fontWeight: 600 }}>{t("Human checkpoint — approve the agent's next action.")}</span>
+            <button onClick={() => onTriggerAgent(issue.id)} className="glow-btn-primary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem' }}>{t('Approve')}</button>
+            <button onClick={() => alert(t('Override: reassign the winning bid or inspector from the FixForce console.'))} className="glow-btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem' }}>{t('Override')}</button>
           </div>
         )}
 
@@ -165,16 +168,16 @@ export default function AgentActivityPanel({ issue, onTriggerAgent, onRunAgent, 
           <div style={{ marginLeft: '0.25rem', marginTop: '0.5rem', background: payoutReady ? 'var(--grass-tint)' : 'var(--alert-tint)', border: `1px solid ${payoutReady ? 'rgba(var(--grass-rgb),.4)' : 'rgba(var(--alert-rgb),.4)'}`, borderRadius: 'var(--radius-ctl)', padding: '0.7rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             {payoutReady ? <Unlock size={18} color="var(--grass-600)" /> : <Lock size={18} color="var(--alert)" />}
             <span style={{ flex: 1, fontSize: '0.74rem', color: 'var(--ink)', fontWeight: 600 }}>
-              {payoutReady ? 'Triple-lock all green — escrow can be released.' : 'Payout locked until all three proof locks pass.'}
+              {t(payoutReady ? 'Triple-lock all green — escrow can be released.' : 'Payout locked until all three proof locks pass.')}
             </span>
-            <button onClick={() => onReleaseEscrow(issue.id)} disabled={!payoutReady} className="glow-btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.74rem' }}>Release escrow</button>
+            <button onClick={() => onReleaseEscrow(issue.id)} disabled={!payoutReady} className="glow-btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.74rem' }}>{t('Release escrow')}</button>
           </div>
         )}
 
         {loading && (
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: 'var(--teal-600)', padding: '0.6rem 0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.74rem' }}>
             <Cpu size={14} style={{ animation: 'spin 2s linear infinite' }} />
-            <span>orchestrator reasoning…</span><span className="terminal-cursor" />
+            <span>{t('orchestrator reasoning…')}</span><span className="terminal-cursor" />
           </div>
         )}
         <div ref={endRef} />

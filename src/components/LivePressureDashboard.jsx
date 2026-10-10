@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { issueProgress, STAGES } from './LoopPipeline.jsx';
 import { useRole } from '../app/RoleContext.jsx';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 function useCountUp(target, duration = 800) {
   const [val, setVal] = useState(0);
@@ -29,7 +30,15 @@ const SEVERITY_BORDER = {
   low: 'var(--grass)',
 };
 
+const SLA_REMINDER_HOURS = { RedAlert: 1, high: 3, medium: 12, low: 24 };
+const CATEGORY_LABEL_KEYS = {
+  pothole: 'Pothole / Road crack', water_leak: 'Water main leak', wiring: 'Downed utility wire',
+  garbage: 'Garbage / Litter', drainage: 'Blocked drainage', debris: 'Construction debris',
+  road_sign: 'Streetlight / Sign', fire: 'Fire / Gas leak',
+};
+
 function MiniLoop({ issue }) {
+  const { t } = useLanguage();
   const frontier = issueProgress(issue);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -38,7 +47,7 @@ function MiniLoop({ issue }) {
         const done = rank < frontier;
         const active = rank === frontier;
         return (
-          <span key={s.key} title={s.label} style={{
+          <span key={s.key} title={t(s.label)} style={{
             width: active ? '9px' : '7px', height: active ? '9px' : '7px',
             borderRadius: '50%',
             background: done ? 'var(--grass)' : active ? 'var(--teal)' : 'var(--cream-300)',
@@ -52,19 +61,22 @@ function MiniLoop({ issue }) {
 }
 
 function Metric({ icon: Icon, value, label, color }) {
+  const { t } = useLanguage();
   return (
     <div className="pressure-metric" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '74px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: color || 'var(--ink-strong)' }}>
         <Icon size={14} />
         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.05rem', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       </div>
-      <span className="pressure-metric-label" style={{ fontSize: '0.62rem', color: 'var(--ink-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+      <span className="pressure-metric-label" style={{ fontSize: '0.62rem', color: 'var(--ink-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t(label)}</span>
     </div>
   );
 }
 
 export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIssue, onSlaSweep, onPreparedness, users = [], view = 'full' }) {
   const { role } = useRole();
+  const { t, language } = useLanguage();
+  const [now, setNow] = useState(() => Date.now());
   const [upvotedIssues, setUpvotedIssues] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('nidaan_upvoted_issues') || '[]');
@@ -72,6 +84,11 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
       return [];
     }
   });
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleUpvote = (issueId) => {
     if (role !== 'citizen') return;
@@ -104,11 +121,15 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
   const sorted = [...activeIssues].sort((a, b) => (b.costOfInaction || 0) - (a.costOfInaction || 0));
 
   const daysOpen = (ts) => Math.max(0, Math.floor((Date.now() - new Date(ts)) / 86400000));
-  const slaState = (deadlineStr) => {
-    const diff = new Date(deadlineStr) - new Date();
-    if (diff <= 0) return { text: 'SLA breached', urgent: true };
-    const h = Math.floor(diff / 3600000);
-    return { text: h < 4 ? `${h}h left` : `${h}h left`, urgent: h < 4 };
+  const slaState = (deadlineStr, severity) => {
+    const deadline = new Date(deadlineStr);
+    if (Number.isNaN(deadline.getTime())) return { text: t('No target set'), urgent: false, reminder: false, title: t('No fix target was set for this report.') };
+    const diff = deadline.getTime() - now;
+    const targetText = deadline.toLocaleString(language === 'hi' ? 'hi-IN' : 'en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    if (diff <= 0) return { text: t('Target missed'), urgent: true, reminder: false, title: `${t('Fix target was')} ${targetText}.` };
+    const h = Math.ceil(diff / 3600000);
+    const reminderWindow = (SLA_REMINDER_HOURS[severity] || SLA_REMINDER_HOURS.medium) * 3600000;
+    return { text: language === 'hi' ? `${h} घंटे बाकी` : `${h}h left`, urgent: h < 4, reminder: diff <= reminderWindow, title: `${t('Fix target:')} ${targetText}.` };
   };
 
   const repeatCount = (lat, lng) => {
@@ -143,20 +164,20 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
     <div className="glass-panel" style={{ padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--teal-tint)', border: '1px solid rgba(var(--brand-rgb),.3)', flexWrap: 'wrap' }}>
       <CloudRain size={22} color="var(--teal-600)" style={{ animation: 'pulse 2.5s infinite' }} />
       <div style={{ flex: 1, minWidth: '240px' }}>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-strong)' }}>Monsoon weather preparedness active</div>
+        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-strong)' }}>{t('Monsoon weather preparedness active')}</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
-          Heavy rainfall forecast within 12h. Nidaan pre-dispatched <strong style={{ color: 'var(--ink)' }}>1 dewatering pump</strong> and crews to Ward 4 underpass.
+          {language === 'hi' ? <>12 घंटे में भारी बारिश का अनुमान है। Nidaan ने वार्ड 4 अंडरपास पर <strong style={{ color: 'var(--ink)' }}>1 पानी निकालने वाला पंप</strong> और टीम पहले भेज दी है।</> : <>Heavy rainfall forecast within 12h. Nidaan pre-dispatched <strong style={{ color: 'var(--ink)' }}>1 dewatering pump</strong> and crews to Ward 4 underpass.</>}
         </p>
       </div>
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         {onPreparedness && (
           <button onClick={() => onPreparedness('heavy_rain')} className="glow-btn-secondary" style={{ fontSize: '0.74rem', padding: '0.45rem 0.7rem' }}>
-            <CloudRain size={13} color="var(--teal)" /> Pre-stage crew
+            <CloudRain size={13} color="var(--teal)" /> {t('Pre-stage crew')}
           </button>
         )}
         {onSlaSweep && (
           <button onClick={onSlaSweep} className="glow-btn-primary" style={{ fontSize: '0.74rem', padding: '0.45rem 0.7rem' }}>
-            <Clock size={13} /> Run SLA sweep
+            <Clock size={13} /> {t('Run SLA sweep')}
           </button>
         )}
       </div>
@@ -167,32 +188,32 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
     <div className="stats-grid">
       <div className="glass-panel" style={{ padding: '1.25rem', borderTop: '3px solid var(--pressure)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: 'var(--pressure)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Daily cost of inaction</span>
+          <span style={{ color: 'var(--pressure)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Daily cost of inaction')}</span>
           <TrendingUp size={16} color="var(--pressure)" />
         </div>
         <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
           <span className="pressure-counter-val" style={{ color: 'var(--pressure)' }}>₹{animatedCost.toLocaleString('en-IN')}</span>
-          <span style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>/day</span>
+          <span style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>{t('/day')}</span>
         </div>
-        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>Economic loss from active street damage, leaks & delayed fixes.</p>
+        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>{t('Economic loss from active street damage, leaks & delayed fixes.')}</p>
       </div>
 
       <div className="glass-panel" style={{ padding: '1.25rem' }}>
-        <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Citizens under pressure</span>
+        <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Citizens under pressure')}</span>
         <div style={{ marginTop: '0.4rem' }}><span className="pressure-counter-val">{animatedCitizens.toLocaleString('en-IN')}</span></div>
-        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>Residents directly affected by open reports.</p>
+        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>{t('Residents directly affected by open reports.')}</p>
       </div>
 
       <div className="glass-panel" style={{ padding: '1.25rem' }}>
-        <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active tickets</span>
+        <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Active tickets')}</span>
         <div style={{ marginTop: '0.4rem' }}><span className="pressure-counter-val">{activeIssues.length}</span></div>
-        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>Open municipal issues routed to the agent.</p>
+        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>{t('Open municipal issues routed to the agent.')}</p>
       </div>
 
       <div className="glass-panel" style={{ padding: '1.25rem', borderTop: '3px solid var(--grass)' }}>
-        <span style={{ color: 'var(--grass-600)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Escrow paid out</span>
+        <span style={{ color: 'var(--grass-600)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Escrow paid out')}</span>
         <div style={{ marginTop: '0.4rem' }}><span className="pressure-counter-val" style={{ color: 'var(--grass-600)' }}>₹{totalSaved.toLocaleString('en-IN')}</span></div>
-        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>Released to contractors on triple-lock proof.</p>
+        <p style={{ fontSize: '0.74rem', marginTop: '0.4rem', color: 'var(--ink-muted)' }}>{t('Released to contractors on triple-lock proof.')}</p>
       </div>
     </div>
   );
@@ -200,18 +221,18 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
   const pressureList = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h2 style={{ fontSize: '1.25rem' }}>Live Pressure Dashboard</h2>
-        <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>Sorted by ₹/day · {activeIssues.length} open</span>
+        <h2 style={{ fontSize: '1.25rem' }}>{t('Live Pressure Dashboard')}</h2>
+        <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{language === 'hi' ? `रोज़ के नुकसान के अनुसार · ${activeIssues.length} खुली` : `Sorted by ₹/day · ${activeIssues.length} open`}</span>
       </div>
 
       {sorted.length === 0 ? (
         <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center' }}>
           <CheckCircle2 size={44} style={{ color: 'var(--grass)', margin: '0 auto 0.75rem' }} />
-          <p style={{ color: 'var(--ink)' }}>No open issues — the loop is clean.</p>
+          <p style={{ color: 'var(--ink)' }}>{t('No open issues — the loop is clean.')}</p>
         </div>
       ) : (
         sorted.map(issue => {
-          const sla = slaState(issue.slaDeadline);
+          const sla = slaState(issue.slaDeadline, issue.severity);
           const isRed = issue.severity === 'RedAlert';
           return (
             <div
@@ -224,7 +245,7 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
               <div className="pressure-card-thumb" style={{ position: 'relative', flexShrink: 0 }}>
                 <img src={issue.photoUrl} alt={issue.category} style={{ width: '88px', height: '88px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)' }} />
                 <span className={`badge ${isRed ? 'badge-danger' : issue.severity === 'high' ? 'badge-warning' : 'badge-info'}`} style={{ position: 'absolute', bottom: '-8px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.58rem', padding: '0.1rem 0.4rem' }}>
-                  {issue.severity}
+                  {t(issue.severity === 'RedAlert' ? 'RedAlert (emergency)' : issue.severity === 'high' ? 'High' : issue.severity === 'medium' ? 'Medium' : 'Low')}
                 </span>
               </div>
 
@@ -232,19 +253,25 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
               <div className="pressure-card-body" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--ink-muted)' }}>#{issue.id} · {issue.ward}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: sla.urgent ? 'var(--critical)' : 'var(--ink-muted)', fontWeight: 600 }}>
+                  <div title={sla.title} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: sla.urgent ? 'var(--critical)' : 'var(--ink-muted)', fontWeight: 600 }}>
                     <Clock size={12} /> {sla.text}
                   </div>
                 </div>
 
-                <h3 style={{ fontSize: '1rem', color: 'var(--ink-strong)', textTransform: 'capitalize' }}>{issue.category.replace('_', ' ')}</h3>
+                <h3 style={{ fontSize: '1rem', color: 'var(--ink-strong)', textTransform: 'capitalize' }}>{t(CATEGORY_LABEL_KEYS[issue.category] || issue.category.replace('_', ' '))}</h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {issue.description}
+                  {t(issue.description)}
                 </p>
+
+                {role === 'official' && sla.reminder && (
+                  <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', alignSelf: 'flex-start', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-ctl)', background: 'var(--teal-tint)', color: 'var(--teal-600)', border: '1px solid rgba(var(--brand-rgb),.2)', fontSize: '0.72rem', fontWeight: 600 }}>
+                    <Clock size={12} /> {t('Friendly reminder: this report’s fix target is coming up. Please review it.')}
+                  </div>
+                )}
 
                 {isRed && (
                   <div className="badge badge-danger" style={{ alignSelf: 'flex-start' }}>
-                    <ShieldAlert size={12} /> RedAlert — emergency lane
+                    <ShieldAlert size={12} /> {t('RedAlert — emergency lane')}
                   </div>
                 )}
 
@@ -281,13 +308,13 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
                           border: '1px solid var(--cream-300)',
                           cursor: 'not-allowed'
                         }}
-                        title="Upvoting is reserved for citizens"
+                        title={t('Upvoting is reserved for citizens')}
                       >
                         <ThumbsUp size={12} /> {issue.citizensAffected || 1}
                       </div>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); onSelectIssue(issue); }} className="glow-btn-primary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem' }}>
-                      <Eye size={12} /> Track
+                      <Eye size={12} /> {t('Track')}
                     </button>
                   </div>
                 </div>
@@ -297,7 +324,7 @@ export default function LivePressureDashboard({ issues, onSelectIssue, onVoteIss
               <div className="pressure-card-metrics" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.6rem', paddingLeft: '0.75rem', borderLeft: '1px solid var(--cream-300)' }}>
                 <Metric icon={Users} value={issue.citizensAffected || 1} label="citizens" />
                 <Metric icon={IndianRupee} value={(issue.costOfInaction || 0).toLocaleString('en-IN')} label="₹/day" color="var(--pressure)" />
-                <Metric icon={Clock} value={`${daysOpen(issue.timestamp)}d`} label="open" />
+                <Metric icon={Clock} value={language === 'hi' ? `${daysOpen(issue.timestamp)} दिन` : `${daysOpen(issue.timestamp)}d`} label="open" />
               </div>
             </div>
           );

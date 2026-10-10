@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './db.js';
@@ -18,6 +19,28 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const SLA_HOURS_BY_SEVERITY = { RedAlert: 4, high: 12, medium: 48, low: 72 };
+const SAFETY_CRITICAL_CATEGORIES = new Set(['fire', 'wiring']);
+const SEVERITY_RANK = { low: 0, medium: 1, high: 2, RedAlert: 3 };
+
+const getSlaPolicy = (category, severity) => {
+  const issueCategory = category || 'pothole';
+  const isSafetyCritical = SAFETY_CRITICAL_CATEGORIES.has(issueCategory);
+  const requestedSeverity = Object.prototype.hasOwnProperty.call(SLA_HOURS_BY_SEVERITY, severity) ? severity : 'medium';
+  const issueSeverity = isSafetyCritical ? 'RedAlert' : requestedSeverity;
+  const slaHours = SLA_HOURS_BY_SEVERITY[issueSeverity] || SLA_HOURS_BY_SEVERITY.medium;
+  const costPerDay = issueSeverity === 'RedAlert' ? 8500
+    : issueSeverity === 'high' ? 3000
+      : issueSeverity === 'medium' ? 800 : 250;
+  return {
+    category: issueCategory,
+    severity: issueSeverity,
+    slaHours,
+    costPerDay,
+    emergency: issueSeverity === 'RedAlert',
+    slaBasis: isSafetyCritical ? 'safety-critical issue type' : `${issueSeverity} severity`,
+  };
+};
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -50,6 +73,7 @@ app.get('/api/issues/:id', async (req, res) => {
 app.post('/api/issues', async (req, res) => {
   try {
     const { category, severity, description, title, suggestedDept, location, voiceUrl, photoUrl, reporterReputation, reporterId } = req.body;
+    const incomingPolicy = getSlaPolicy(category, severity);
     
     // Check for nearby matching issues to deduplicate
     const issues = await db.getCollection('issues');
@@ -78,35 +102,39 @@ app.post('/api/issues', async (req, res) => {
 
     if (existingDuplicate) {
       // Deduplicate: merge reports by increasing count of affected citizens
+      const currentPolicy = getSlaPolicy(existingDuplicate.category, existingDuplicate.severity);
+      const policy = (SEVERITY_RANK[incomingPolicy.severity] ?? 0) > (SEVERITY_RANK[currentPolicy.severity] ?? 0)
+        ? incomingPolicy
+        : currentPolicy;
+      const candidateDeadline = Date.now() + policy.slaHours * 3600 * 1000;
+      const currentDeadline = existingDuplicate.slaDeadline ? new Date(existingDuplicate.slaDeadline).getTime() : NaN;
+      const slaDeadline = new Date(Number.isFinite(currentDeadline)
+        ? Math.min(currentDeadline, candidateDeadline)
+        : candidateDeadline).toISOString();
+      const priorityNote = policy.severity !== currentPolicy.severity ? ` Priority raised to ${policy.severity}.` : '';
       const updated = await db.updateDoc('issues', existingDuplicate.id, {
         citizensAffected: (existingDuplicate.citizensAffected || 1) + 1,
+        severity: policy.severity,
+        emergency: policy.emergency,
+        costOfInaction: policy.costPerDay,
+        slaTargetHours: policy.slaHours,
+        slaBasis: policy.slaBasis,
+        slaDeadline,
         // Append log to tamper-evident ledger trail
         ledgerTrail: appendLedger(existingDuplicate.ledgerTrail, {
           status: existingDuplicate.status,
           actor: 'System-Deduplicator',
-          message: `Deduplicated matching report. Affected count increased to ${(existingDuplicate.citizensAffected || 1) + 1}.`
+          message: `Deduplicated matching report. Affected count increased to ${(existingDuplicate.citizensAffected || 1) + 1}.${priorityNote}`
         })
       });
       console.log(`Deduplicated new report. Merged with issue: ${existingDuplicate.id}`);
       return res.status(200).json({ deduplicated: true, issue: updated });
     }
 
-    // SLA Calculation based on category/severity
-    let slaHours = 72; // default
-    if (severity === 'RedAlert') slaHours = 4;
-    else if (severity === 'high') slaHours = 12;
-    else if (severity === 'medium') slaHours = 48;
-    
-    // Inaction cost calculation
-    let costPerDay = 250;
-    if (severity === 'RedAlert') costPerDay = 8500;
-    else if (severity === 'high') costPerDay = 3000;
-    else if (severity === 'medium') costPerDay = 800;
-
-    const isEmergency = severity === 'RedAlert';
+    const { category: issueCategory, severity: issueSeverity, slaHours, costPerDay, emergency: isEmergency, slaBasis } = incomingPolicy;
     const newIssue = {
-      category: category || 'pothole',
-      severity: severity || 'medium',
+      category: issueCategory,
+      severity: issueSeverity,
       status: 'reported',
       title: title || `${(category || 'issue').replace('_', ' ')} reported`,
       description: description || 'No description provided.',
@@ -115,6 +143,8 @@ app.post('/api/issues', async (req, res) => {
       location: location || { lat: 12.9716, lng: 77.5946, address: 'Demo City' },
       citizensAffected: 1,
       costOfInaction: costPerDay,
+      slaTargetHours: slaHours,
+      slaBasis,
       slaDeadline: new Date(Date.now() + slaHours * 3600 * 1000).toISOString(),
       reporterReputation: reporterReputation || 20,
       reporterId: reporterId || null,
@@ -394,8 +424,8 @@ app.get('/api/status', (req, res) => {
 // 9. AI photo triage — Gemini Flash classifies a photo into {type, severity, title, description, suggestedDept}
 app.post('/api/triage', async (req, res) => {
   try {
-    const { photoUrl, photoBase64, mimeType, hint } = req.body;
-    const result = await triagePhoto({ photoUrl, photoBase64, mimeType, hint });
+    const { photoUrl, photoBase64, mimeType, hint, language } = req.body;
+    const result = await triagePhoto({ photoUrl, photoBase64, mimeType, hint, language });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -442,6 +472,65 @@ app.post('/api/issues/:id/release', async (req, res) => {
 });
 
 // 13. SLA sweep — escalate every open issue whose deadline has passed (PressurePath 4b)
+let slaMonitorRunning = false;
+const markOverdueIssues = async () => {
+  if (slaMonitorRunning) return { skipped: true, flaggedCount: 0 };
+  slaMonitorRunning = true;
+  try {
+    const issues = await db.getCollection('issues');
+    const now = Date.now();
+    let flaggedCount = 0;
+    for (const issue of issues) {
+      const deadline = issue.slaDeadline ? new Date(issue.slaDeadline).getTime() : NaN;
+      const isOpen = !['verified', 'escalated'].includes(issue.status);
+      if (!Number.isFinite(deadline) || deadline > now || !isOpen || issue.slaBreachRecordedAt) continue;
+
+      const recordedAt = new Date(now).toISOString();
+      await db.updateDoc('issues', issue.id, {
+        slaBreachRecordedAt: recordedAt,
+        ledgerTrail: appendLedger(issue.ledgerTrail || [], {
+          status: issue.status,
+          actor: 'Nidaan-SLA-Monitor',
+          message: 'Target time passed. Marked overdue for official follow-up.'
+        })
+      });
+      console.log(`[Nidaan] Marked issue ${issue.id} overdue for official follow-up.`);
+      flaggedCount += 1;
+    }
+    return { skipped: false, flaggedCount };
+  } finally {
+    slaMonitorRunning = false;
+  }
+};
+
+// Protected endpoint for a production scheduler (for example, a Render Cron Job).
+// This records overdue reports in Nidaan only; it does not send emails or run the
+// separate, action-taking /api/sla/sweep workflow below.
+app.post('/api/sla/monitor', async (req, res) => {
+  const expectedToken = process.env.SLA_MONITOR_TOKEN;
+  if (!expectedToken) {
+    return res.status(503).json({ error: 'SLA monitor is not configured.' });
+  }
+
+  const authorization = req.get('authorization') || '';
+  const providedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  const expectedBuffer = Buffer.from(expectedToken);
+  const providedBuffer = Buffer.from(providedToken);
+  const isAuthorized = expectedBuffer.length === providedBuffer.length
+    && timingSafeEqual(expectedBuffer, providedBuffer);
+  if (!isAuthorized) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  try {
+    const result = await markOverdueIssues();
+    res.json({ checked: true, ...result });
+  } catch (error) {
+    console.error('[Nidaan] Scheduled SLA check failed:', error.message);
+    res.status(500).json({ error: 'Scheduled SLA check failed.' });
+  }
+});
+
 app.post('/api/sla/sweep', async (req, res) => {
   try {
     const issues = await db.getCollection('issues');
@@ -580,6 +669,15 @@ app.get('*', (req, res, next) => {
 
 const server = app.listen(PORT, () => {
   console.log(`Nidaan Backend API running on http://localhost:${PORT}`);
+  // Keep the local demo's audit trail current without sending messages outside Nidaan.
+  if (process.env.NODE_ENV !== 'production') {
+    const runLocalSlaMonitor = () => markOverdueIssues().catch((error) => {
+      console.error('[Nidaan] Automatic SLA check failed:', error.message);
+    });
+    const slaMonitorInterval = setInterval(runLocalSlaMonitor, 60_000);
+    slaMonitorInterval.unref();
+    runLocalSlaMonitor();
+  }
 });
 
 // Fail gracefully with an actionable message instead of an unhandled crash

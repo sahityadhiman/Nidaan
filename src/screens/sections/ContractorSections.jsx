@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { Briefcase, MapPin, Users, IndianRupee, Clock, Send, CheckCircle, Wallet, HardHat, UserPlus } from 'lucide-react';
 import { useAppData } from '../../app/AppDataContext.jsx';
+import { useLanguage } from '../../app/LanguageContext.jsx';
 import FixForceMarketplace from '../../components/FixForceMarketplace.jsx';
 
-const EmptyState = ({ icon: Icon, title, body }) => (
-  <div className="glass-panel" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-    {Icon && <Icon size={40} style={{ color: 'var(--teal)', margin: '0 auto 0.75rem' }} />}
-    <h3 style={{ fontSize: '1.05rem' }}>{title}</h3>
-    {body && <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginTop: '0.4rem' }}>{body}</p>}
-  </div>
-);
+const EmptyState = ({ icon: Icon, title, body }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="glass-panel" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
+      {Icon && <Icon size={40} style={{ color: 'var(--teal)', margin: '0 auto 0.75rem' }} />}
+      <h3 style={{ fontSize: '1.05rem' }}>{t(title)}</h3>
+      {body && <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginTop: '0.4rem' }}>{t(body)}</p>}
+    </div>
+  );
+};
 
 // Shared FixForce wrapper (maximum reuse — FixForce already renders the right
 // content per issue status: crew/BOM when assigned, triple-lock when fixed,
@@ -42,6 +46,7 @@ function FixForcePanel({ issue, tourId }) {
 
 /* 0 — Contractor Registration ("Register Yourself") */
 export function ContractorRegister() {
+  const { t } = useLanguage();
   const { handleRegisterContractor, showToast } = useAppData();
   const [regName, setRegName] = useState('');
   const [regSpecialty, setRegSpecialty] = useState('pothole');
@@ -53,29 +58,29 @@ export function ContractorRegister() {
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
-      showToast('Geolocation is not supported by your browser.', 'danger');
+      showToast(t('Geolocation is not supported by your browser.'), 'danger');
       return;
     }
     setDetectingGps(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setRegAddress(`Geo-located: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+        setRegAddress(`${t('Geo-located:')} ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
         setDetectingGps(false);
-        showToast('Location detected successfully via GPS!', 'success');
+        showToast(t('Location detected successfully via GPS!'), 'success');
       },
       (err) => {
         console.error(err);
         setDetectingGps(false);
-        showToast('Failed to detect location. Please type an address.', 'warning');
+        showToast(t('Failed to detect location. Please type an address.'), 'warning');
       }
     );
   };
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    if (!regName) return alert('Please enter contractor name');
-    if (!regAddress) return alert('Please enter your landmark or address');
+    if (!regName) return alert(t('Please enter contractor name'));
+    if (!regAddress) return alert(t('Please enter your landmark or address'));
 
     let lat = 12.971598;
     let lng = 77.594562;
@@ -126,63 +131,63 @@ export function ContractorRegister() {
     <div className="glass-panel animate-fade-in-up" style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <HardHat size={24} color="var(--teal)" /> Register Yourself
+          <HardHat size={24} color="var(--teal)" /> {t('Register Yourself')}
         </h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', marginTop: '0.4rem' }}>
-          Register your contractor firm with specialty and rates to participate in dispatches.
+          {t('Register your contractor firm with specialty and rates to participate in dispatches.')}
         </p>
       </div>
 
       {registrationSuccess && (
         <div className="badge badge-success" style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CheckCircle size={16} /> Contractor profile registered and pinned on the Responder Radar.
+          <CheckCircle size={16} /> {t('Contractor profile registered and pinned on the Responder Radar.')}
         </div>
       )}
 
       <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Firm / Contractor name</label>
-          <input className="field" type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="e.g. Kaveri Drainage Systems Ltd" required />
+          <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{t('Firm / Contractor name')}</label>
+          <input className="field" type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder={t('e.g. Kaveri Drainage Systems Ltd')} required />
         </div>
 
         <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Specialty</label>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{t('Specialty')}</label>
             <select className="field" value={regSpecialty} onChange={(e) => setRegSpecialty(e.target.value)}>
-              <option value="pothole">Potholes / Roadways</option>
-              <option value="water_leak">Water Pipelines</option>
-              <option value="wiring">Electrical Utility</option>
-              <option value="garbage">Garbage Cleanups</option>
-              <option value="drainage">Sewerage & Drainage</option>
-              <option value="debris">Masonry / Debris</option>
-              <option value="road_sign">Streetlights / Signage</option>
+              <option value="pothole">{t('Potholes / Roadways')}</option>
+              <option value="water_leak">{t('Water Pipelines')}</option>
+              <option value="wiring">{t('Electrical Utility')}</option>
+              <option value="garbage">{t('Garbage Cleanups')}</option>
+              <option value="drainage">{t('Sewerage & Drainage')}</option>
+              <option value="debris">{t('Masonry / Debris')}</option>
+              <option value="road_sign">{t('Streetlights / Signage')}</option>
             </select>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Hourly rate (₹)</label>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>{t('Hourly rate (₹)')}</label>
             <input className="field" type="number" value={regRate} onChange={(e) => setRegRate(e.target.value)} min="1" required />
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px solid var(--cream-300)', paddingTop: '1rem' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-strong)' }}>Service Location</label>
-          <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginBottom: '0.5rem' }}>Provide your firm's operating address or auto-detect via GPS.</p>
+          <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-strong)' }}>{t('Service Location')}</label>
+          <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginBottom: '0.5rem' }}>{t('Provide your firm\'s operating address or auto-detect via GPS.')}</p>
           
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Landmark / Address</label>
-              <input className="field" type="text" value={regAddress} onChange={(e) => setRegAddress(e.target.value)} placeholder="e.g. 12th Main Road, Indiranagar" required />
+              <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>{t('Landmark / Address')}</label>
+              <input className="field" type="text" value={regAddress} onChange={(e) => setRegAddress(e.target.value)} placeholder={t('e.g. 12th Main Road, Indiranagar')} required />
             </div>
             
             <button type="button" className="glow-btn-secondary" onClick={detectLocation} disabled={detectingGps} style={{ height: '42px', minWidth: '130px', justifyContent: 'center', fontSize: '0.85rem' }}>
-              {detectingGps ? 'Detecting...' : '📍 Detect GPS'}
+              {detectingGps ? t('Detecting...') : t('📍 Detect GPS')}
             </button>
           </div>
         </div>
 
         <button type="submit" className="glow-btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem', padding: '0.75rem' }}>
-          <Send size={16} fill="none" /> Register Contractor Firm
+          <Send size={16} fill="none" /> {t('Register Contractor Firm')}
         </button>
       </form>
     </div>
@@ -191,6 +196,7 @@ export function ContractorRegister() {
 
 /* 1 — Available Jobs (reverse-auction bid entry) */
 export function ContractorJobs() {
+  const { t } = useLanguage();
   const { issues, showToast } = useAppData();
   const jobs = issues.filter(i => ['reported', 'triaged', 'bidding'].includes(i.status));
   const [openId, setOpenId] = useState(null);
@@ -239,7 +245,7 @@ export function ContractorJobs() {
 
               <img src={issue.photoUrl} alt={issue.category} style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: 'var(--radius-ctl)', border: '1px solid var(--cream-300)', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ fontSize: '1rem', textTransform: 'capitalize' }}>{issue.title || issue.category.replace('_', ' ')}</h3>
+                <h3 style={{ fontSize: '1rem', textTransform: 'capitalize' }}>{t(issue.title || issue.category.replace('_', ' '))}</h3>
                 <div style={{ display: 'flex', gap: '0.9rem', flexWrap: 'wrap', fontSize: '0.74rem', color: 'var(--ink-muted)', marginTop: '0.25rem' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><MapPin size={12} /> {issue.ward}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Users size={12} /> {issue.citizensAffected || 1} affected</span>

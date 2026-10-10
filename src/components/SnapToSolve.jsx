@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Camera, Mic, MapPin, Send, AlertTriangle, CheckCircle, Sparkles, ScanLine, Upload, Zap, Languages } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Mic, MapPin, Send, AlertTriangle, CheckCircle, Sparkles, ScanLine, Upload, Zap, Languages, Clock } from 'lucide-react';
 import { useAppData } from '../app/AppDataContext.jsx';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 const SAMPLE_PHOTO_LINKS = {
   pothole: '/review_photos/pothole.png',
@@ -12,6 +13,8 @@ const SAMPLE_PHOTO_LINKS = {
   road_sign: 'https://images.unsplash.com/photo-1642112539143-51086ead8cd5?auto=format&fit=crop&w=600&q=80',
   fire: '/review_photos/fire_1.jpg',
 };
+const SLA_HOURS_BY_SEVERITY = { RedAlert: 4, high: 12, medium: 48, low: 72 };
+const SAFETY_CRITICAL_CATEGORIES = new Set(['fire', 'wiring']);
 
 // Scenario presets (feature 0 — selectable before the run)
 const PRESETS = [
@@ -23,6 +26,7 @@ const PRESETS = [
 
 export default function SnapToSolve({ onIssueCreated, user }) {
   const { agentMode } = useAppData();
+  const { t: translate, language } = useLanguage();
   const [category, setCategory] = useState('water_leak');
   const [severity, setSeverity] = useState('high');
   const [title, setTitle] = useState('');
@@ -37,7 +41,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
   const [confidence, setConfidence] = useState(null);
   const [triageSource, setTriageSource] = useState(null);
   const [recording, setRecording] = useState(false);
-  const [lang, setLang] = useState('en-IN');
+  const [lang, setLang] = useState(() => language === 'hi' ? 'hi-IN' : 'en-IN');
   const [analyzing, setAnalyzing] = useState(false);
   const [triaging, setTriaging] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
@@ -46,6 +50,10 @@ export default function SnapToSolve({ onIssueCreated, user }) {
   const recogRef = useRef(null);
   const transcriptRef = useRef('');
 
+  useEffect(() => {
+    setLang(language === 'hi' ? 'hi-IN' : 'en-IN');
+  }, [language]);
+
   const runTriage = async (hintOverride, photoUrlOverride) => {
     setTriaging(true);
     setConfidence(null);
@@ -53,7 +61,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
     try {
       const res = await fetch('/api/triage', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoUrl: photoBase64 ? undefined : targetPhotoUrl, photoBase64, mimeType, hint: hintOverride ?? description }),
+        body: JSON.stringify({ photoUrl: photoBase64 ? undefined : targetPhotoUrl, photoBase64, mimeType, hint: hintOverride ?? description, language: lang.startsWith('hi') ? 'hi' : 'en' }),
       });
       const t = await res.json();
       setCategory(t.category); setSeverity(t.severity);
@@ -61,7 +69,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
       setConfidence(t.confidence); setTriageSource(t.source);
       if (!photoBase64) setPhotoUrl(SAMPLE_PHOTO_LINKS[t.category] || targetPhotoUrl);
     } catch {
-      alert('Triage failed — check the backend is running.');
+      alert(translate('Triage failed — check the backend is running.'));
     } finally { setTriaging(false); }
   };
 
@@ -78,16 +86,17 @@ export default function SnapToSolve({ onIssueCreated, user }) {
   };
 
   const applyPreset = (p) => {
+    const hint = translate(p.hint);
     setPhotoBase64(null); setMimeType(null);
-    setPhotoUrl(p.photo); setCategory(p.key); setDescription(p.hint);
-    runTriage(p.hint, p.photo);
+    setPhotoUrl(p.photo); setCategory(p.key); setDescription(hint);
+    runTriage(hint, p.photo);
   };
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { const g = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setGps(g); setAddress(`Geo-located: ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`); },
-        () => alert('Could not retrieve browser GPS. Using preset demo coordinates.')
+        (pos) => { const g = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setGps(g); setAddress(`${translate('Geo-located:')} ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`); },
+        () => alert(translate('Could not retrieve browser GPS. Using preset demo coordinates.'))
       );
     }
   };
@@ -120,11 +129,11 @@ export default function SnapToSolve({ onIssueCreated, user }) {
         }
         setRecording(false);
         if (event.error === 'not-allowed') {
-          setVoiceError('Microphone access denied. Please enable microphone permissions in your browser.');
+          setVoiceError(translate('Microphone access denied. Please enable microphone permissions in your browser.'));
         } else if (event.error === 'network') {
-          setVoiceError('Speech recognition network error. (Web Speech API requires an active internet connection in this browser).');
+          setVoiceError(translate('Speech recognition network error. (Web Speech API requires an active internet connection in this browser).'));
         } else {
-          setVoiceError(`Speech recognition error: ${event.error}.`);
+          setVoiceError(`${translate('Speech recognition error:')} ${event.error}.`);
         }
       };
       recogRef.current = recog;
@@ -134,7 +143,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
       try { recog.start(); } catch (err) {
         console.error('Failed to start speech recognition:', err);
         setRecording(false);
-        setVoiceError('Failed to start speech recognition.');
+        setVoiceError(translate('Failed to start speech recognition.'));
       }
     } else {
       setRecording(true); setDescription('');
@@ -176,7 +185,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
       const response = await fetch('/api/issues', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          category, severity, description, title, suggestedDept,
+          category, severity: effectiveSeverity, description, title, suggestedDept,
           location: { lat: gps.lat + (Math.random() - 0.5) * 0.001, lng: gps.lng + (Math.random() - 0.5) * 0.001, address, ward: gps.lat > 12.971 ? 'Ward 12 - Aero City' : 'Ward 4 - Green Park' },
           photoUrl: photoBase64 ? SAMPLE_PHOTO_LINKS[category] : photoUrl,
           reporterReputation: user?.trustScore || 85, reporterId: user?.userId || null,
@@ -184,21 +193,24 @@ export default function SnapToSolve({ onIssueCreated, user }) {
       });
       const data = await response.json();
       setAnalyzing(false);
-      if (response.ok) { setSubmitResult(data); onIssueCreated(data.issue, { emergency: severity === 'RedAlert' && !data.deduplicated }); }
-      else alert('Failed to report issue: ' + data.error);
+      if (response.ok) { setSubmitResult(data); onIssueCreated(data.issue, { emergency: data.issue.emergency && !data.deduplicated }); }
+      else alert(`${translate('Failed to report issue:')} ${data.error}`);
     } catch (error) {
-      setAnalyzing(false); console.error(error); alert('Error connecting to backend API');
+      setAnalyzing(false); console.error(error); alert(translate('Error connecting to backend API'));
     }
   };
 
   const labelStyle = { fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink)' };
-  const isRed = severity === 'RedAlert';
+  const isSafetyCritical = SAFETY_CRITICAL_CATEGORIES.has(category);
+  const effectiveSeverity = isSafetyCritical ? 'RedAlert' : (severity || 'medium');
+  const targetSlaHours = SLA_HOURS_BY_SEVERITY[effectiveSeverity] || SLA_HOURS_BY_SEVERITY.medium;
+  const isRed = effectiveSeverity === 'RedAlert';
 
   return (
     <div className="animate-fade-in-up" style={{ maxWidth: '500px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
       <div style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Snap to report</h2>
-        <p style={{ fontSize: '0.9rem', color: 'var(--ink-muted)' }}>One photo. Gemini Flash does the paperwork — no category dropdowns needed.</p>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{translate('Snap to report')}</h2>
+        <p style={{ fontSize: '0.9rem', color: 'var(--ink-muted)' }}>{translate('One photo. Gemini Flash does the paperwork — no category dropdowns needed.')}</p>
       </div>
 
       {agentMode === 'simulated' && (
@@ -216,9 +228,9 @@ export default function SnapToSolve({ onIssueCreated, user }) {
         }}>
           <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
           <div>
-            <strong>Simulated AI Mode Active:</strong> GEMINI_API_KEY is not configured in your Cloud Run environment. AI vision triage will fall back to local keyword heuristics (defaulting to Pothole if no text is typed).
+            <strong>{translate('Simulated AI Mode Active:')}</strong> {translate('GEMINI_API_KEY is not configured. AI vision triage will fall back to local keyword checks.')}
             <div style={{ marginTop: '0.3rem', fontSize: '0.75rem', opacity: 0.85 }}>
-              To enable live Gemini Flash triage, configure the <code>GEMINI_API_KEY</code> environment variable in your Google Cloud Run service settings.
+              {translate('To enable live Gemini Flash triage, configure the GEMINI_API_KEY environment variable in your service settings.')}
             </div>
           </div>
         </div>
@@ -228,7 +240,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
       <div className="mobile-wrap" style={{ display: 'flex', gap: '0.5rem' }}>
         {PRESETS.map(p => (
           <button key={p.key} onClick={() => applyPreset(p)} className="glow-btn-secondary" style={{ flex: 1, fontSize: '0.72rem', padding: '0.45rem', justifyContent: 'center' }}>
-            <Zap size={12} color="var(--teal)" /> {p.label}
+            <Zap size={12} color="var(--teal)" /> {translate(p.label)}
           </button>
         ))}
       </div>
@@ -244,10 +256,10 @@ export default function SnapToSolve({ onIssueCreated, user }) {
             )}
             <div style={{ display: 'flex', gap: '0.5rem', zIndex: 2 }}>
               <button type="button" onClick={() => fileRef.current?.click()} style={{ background: 'var(--ink-strong)', border: 'none', color: '#fff', borderRadius: 'var(--radius-ctl)', padding: '0.75rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', boxShadow: 'var(--shadow-lift)' }}>
-                <Upload size={18} /> Upload photo
+                <Upload size={18} /> {translate('Upload photo')}
               </button>
               <button type="button" onClick={() => runTriage()} disabled={triaging} style={{ background: 'var(--teal)', border: 'none', color: '#fff', borderRadius: 'var(--radius-ctl)', padding: '0.75rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', boxShadow: 'var(--shadow-lift)' }}>
-                <Camera size={18} /> {triaging ? 'Triaging…' : 'AI triage'}
+                <Camera size={18} /> {triaging ? translate('Triaging…') : translate('AI triage')}
               </button>
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
@@ -256,11 +268,11 @@ export default function SnapToSolve({ onIssueCreated, user }) {
           {confidence != null && (
             <div style={{ background: 'var(--teal-tint)', border: '1px solid rgba(var(--brand-rgb),.3)', borderRadius: 'var(--radius-ctl)', padding: '0.6rem 0.8rem', fontSize: '0.78rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: 'var(--ink-strong)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Sparkles size={13} color="var(--teal-600)" /> {title || 'AI triage result'}</span>
-                <span className="svc-badge">{triageSource === 'gemini' ? 'Gemini Flash' : 'heuristic'} · {(confidence * 100).toFixed(0)}%</span>
+                <span style={{ fontWeight: 700, color: 'var(--ink-strong)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Sparkles size={13} color="var(--teal-600)" /> {title || translate('AI triage result')}</span>
+                <span className="svc-badge">{triageSource === 'gemini' ? 'Gemini Flash' : translate('heuristic')} · {(confidence * 100).toFixed(0)}%</span>
               </div>
-              <div style={{ marginTop: '0.35rem', color: 'var(--ink-muted)' }}>Routes to <strong style={{ color: 'var(--teal-600)' }}>{suggestedDept}</strong></div>
-              {isRed && <div className="badge badge-danger" style={{ marginTop: '0.4rem' }}><AlertTriangle size={12} /> RedAlert — Emergency lane</div>}
+              <div style={{ marginTop: '0.35rem', color: 'var(--ink-muted)' }}>{translate('Routes to')} <strong style={{ color: 'var(--teal-600)' }}>{translate(suggestedDept)}</strong></div>
+              {isRed && <div className="badge badge-danger" style={{ marginTop: '0.4rem' }}><AlertTriangle size={12} /> {translate('RedAlert — Emergency lane')}</div>}
             </div>
           )}
         </div>
@@ -269,14 +281,14 @@ export default function SnapToSolve({ onIssueCreated, user }) {
           {/* Voice */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={labelStyle}>Or speak it</label>
+              <label style={labelStyle}>{translate('Or speak it')}</label>
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                 <button type="button" onClick={() => setLang(l => l === 'en-IN' ? 'hi-IN' : 'en-IN')} style={{ background: 'var(--cream-100)', border: '1px solid var(--cream-300)', borderRadius: '99px', padding: '0.25rem 0.6rem', fontSize: '0.68rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--teal-600)', fontWeight: 600 }}>
                   <Languages size={12} /> {lang === 'en-IN' ? 'English' : 'हिन्दी'}
                 </button>
                 <button type="button" onClick={handleVoiceRecord} style={{ background: recording ? 'var(--critical-tint)' : 'var(--cream-100)', border: `1px solid ${recording ? 'rgba(var(--critical-rgb),.4)' : 'var(--cream-300)'}`, color: recording ? 'var(--critical)' : 'var(--teal-600)', borderRadius: '99px', padding: '0.3rem 0.7rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
                   <Mic size={12} style={{ animation: recording ? 'pulse 1s infinite' : 'none' }} />
-                  {recording ? 'Listening…' : 'Voice report'}
+                  {recording ? translate('Listening…') : translate('Voice report')}
                 </button>
               </div>
             </div>
@@ -288,7 +300,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
                   <span>{voiceError}</span>
                 </div>
                 <button type="button" onClick={() => { simulateVoice(); setVoiceError(null); }} className="glow-btn-secondary" style={{ alignSelf: 'flex-start', fontSize: '0.72rem', padding: '0.25rem 0.6rem', height: 'auto', background: 'rgba(var(--critical-rgb),.1)', border: '1px solid rgba(var(--critical-rgb),.2)', color: 'var(--critical)', cursor: 'pointer', fontWeight: 600 }}>
-                  Run Demo Simulation
+                  {translate('Run Demo Simulation')}
                 </button>
               </div>
             )}
@@ -301,39 +313,43 @@ export default function SnapToSolve({ onIssueCreated, user }) {
               </div>
             )}
 
-            <textarea className="field" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="The AI fills this from your photo or voice. Edit if needed." style={{ height: '84px', resize: 'none', fontSize: '0.88rem' }} />
+            <textarea className="field" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={translate('The AI fills this from your photo or voice. Edit if needed.')} style={{ height: '84px', resize: 'none', fontSize: '0.88rem' }} />
           </div>
 
           {/* AI-filled fields */}
           <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={labelStyle}>Category <span style={{ color: 'var(--teal-600)', fontWeight: 700 }}>· AI</span></label>
+              <label style={labelStyle}>{translate('Category')} <span style={{ color: 'var(--teal-600)', fontWeight: 700 }}>· AI</span></label>
               <select className="field" value={category} onChange={(e) => { setCategory(e.target.value); setPhotoBase64(null); setPhotoUrl(SAMPLE_PHOTO_LINKS[e.target.value]); }}>
-                <option value="pothole">Pothole / Road crack</option>
-                <option value="water_leak">Water main leak</option>
-                <option value="wiring">Downed utility wire</option>
-                <option value="garbage">Garbage / Litter</option>
-                <option value="drainage">Blocked drainage</option>
-                <option value="debris">Construction debris</option>
-                <option value="road_sign">Streetlight / Sign</option>
-                <option value="fire">Fire / Gas leak</option>
+                <option value="pothole">{translate('Pothole / Road crack')}</option>
+                <option value="water_leak">{translate('Water main leak')}</option>
+                <option value="wiring">{translate('Downed utility wire')}</option>
+                <option value="garbage">{translate('Garbage / Litter')}</option>
+                <option value="drainage">{translate('Blocked drainage')}</option>
+                <option value="debris">{translate('Construction debris')}</option>
+                <option value="road_sign">{translate('Streetlight / Sign')}</option>
+                <option value="fire">{translate('Fire / Gas leak')}</option>
               </select>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={labelStyle}>Severity <span style={{ color: 'var(--teal-600)', fontWeight: 700 }}>· AI</span></label>
-              <select className="field" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="RedAlert">RedAlert (emergency)</option>
+              <label style={labelStyle}>{translate('Severity')} <span style={{ color: 'var(--teal-600)', fontWeight: 700 }}>· AI</span></label>
+              <select className="field" value={effectiveSeverity} disabled={isSafetyCritical} onChange={(e) => setSeverity(e.target.value)}>
+                <option value="low">{translate('Low')}</option>
+                <option value="medium">{translate('Medium')}</option>
+                <option value="high">{translate('High')}</option>
+                <option value="RedAlert">{translate('RedAlert (emergency)')}</option>
               </select>
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: '0.45rem', background: isRed ? 'var(--critical-tint)' : 'var(--teal-tint)', color: isRed ? 'var(--critical)' : 'var(--teal-600)', borderRadius: 'var(--radius-ctl)', padding: '0.6rem 0.75rem', fontSize: '0.78rem', lineHeight: 1.4 }}>
+              <Clock size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span><strong>{language === 'hi' ? `समाधान का लक्ष्य: ${targetSlaHours} घंटे के भीतर।` : `Target fix time: within ${targetSlaHours} hours.`}</strong>{isSafetyCritical ? ` ${translate('Fire/gas and downed-wire reports get emergency priority.')}` : ` ${translate('This target is based on the selected severity.')}`}</span>
             </div>
           </div>
 
           {/* Location */}
           <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={labelStyle}>Location</label>
+              <label style={labelStyle}>{translate('Location')}</label>
               <input className="field" type="text" value={address} onChange={(e) => setAddress(e.target.value)} />
             </div>
             <button type="button" onClick={handleGetLocation} className="glow-btn-secondary" style={{ height: '42px' }}>
@@ -342,7 +358,7 @@ export default function SnapToSolve({ onIssueCreated, user }) {
           </div>
 
           <button type="submit" className="glow-btn-primary" disabled={analyzing} style={{ width: '100%', justifyContent: 'center', height: '48px', fontSize: '0.95rem', ...(isRed ? { background: 'var(--critical)' } : {}) }}>
-            {analyzing ? (<><Sparkles size={16} style={{ animation: 'spin 2s linear infinite' }} /> Lodging…</>) : isRed ? (<><AlertTriangle size={16} /> Lodge RedAlert to Emergency lane</>) : (<><Send size={16} /> Lodge grievance to Nidaan</>)}
+            {analyzing ? (<><Sparkles size={16} style={{ animation: 'spin 2s linear infinite' }} /> {translate('Lodging…')}</>) : isRed ? (<><AlertTriangle size={16} /> {translate('Lodge RedAlert to Emergency lane')}</>) : (<><Send size={16} /> {translate('Lodge grievance to Nidaan')}</>)}
           </button>
         </form>
       </div>
@@ -353,16 +369,16 @@ export default function SnapToSolve({ onIssueCreated, user }) {
             <>
               <AlertTriangle size={24} color="var(--alert)" />
               <div>
-                <h3 style={{ fontSize: '0.95rem', color: 'var(--ink-strong)' }}>Smart deduplication triggered</h3>
-                <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>An active ticket already exists nearby. Your report merged — community pressure rose to <strong style={{ color: 'var(--ink)' }}>{submitResult.issue.citizensAffected} reports</strong>.</p>
+                <h3 style={{ fontSize: '0.95rem', color: 'var(--ink-strong)' }}>{translate('Smart deduplication triggered')}</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>{language === 'hi' ? `पास में यह शिकायत पहले से दर्ज है। आपकी शिकायत उसमें जुड़ गई — अब कुल ${submitResult.issue.citizensAffected} शिकायतें हैं।` : <>An active ticket already exists nearby. Your report merged — community pressure rose to <strong style={{ color: 'var(--ink)' }}>{submitResult.issue.citizensAffected} reports</strong>.</>}</p>
               </div>
             </>
           ) : (
             <>
               <CheckCircle size={24} color="var(--grass)" />
               <div>
-                <h3 style={{ fontSize: '0.95rem', color: 'var(--ink-strong)' }}>Ticket created</h3>
-                <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>Logged as <strong style={{ color: 'var(--ink)' }}>{submitResult.issue.id}</strong>. Open the War Room and hit <strong>Run full resolution</strong> to watch the agent close the loop.</p>
+                <h3 style={{ fontSize: '0.95rem', color: 'var(--ink-strong)' }}>{translate('Ticket created')}</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>{language === 'hi' ? <>शिकायत नंबर <strong style={{ color: 'var(--ink)' }}>{submitResult.issue.id}</strong>। एजेंट की कार्रवाई देखने के लिए अपनी शिकायतें खोलें।</> : <>Logged as <strong style={{ color: 'var(--ink)' }}>{submitResult.issue.id}</strong>. Open My Reports to watch the agent work.</>}</p>
               </div>
             </>
           )}

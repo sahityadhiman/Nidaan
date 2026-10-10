@@ -1,6 +1,7 @@
 import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import { ChevronRight, X, Cpu, Flag } from 'lucide-react';
 import { useTour } from './TourContext.jsx';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 const DIM = 'rgba(14,42,69,0.58)';
 const PAD = 8;
@@ -60,7 +61,7 @@ export default function TourOverlay() {
       <div style={overlayBase}>
         <div className="glass-panel" style={{ padding: '1.5rem 1.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Cpu size={18} color="var(--teal)" style={{ animation: 'spin 2s linear infinite' }} />
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--ink)' }}>Preparing the demo city…</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--ink)' }}>{t('Preparing the demo city…')}</span>
         </div>
       </div>
     );
@@ -101,7 +102,7 @@ export default function TourOverlay() {
 
       {/* Tooltip card */}
       <div
-        role="dialog" aria-modal="true" aria-label={`Guided tour step ${tour.stepIndex + 1} of ${tour.total}`}
+        role="dialog" aria-modal="true" aria-label={language === 'hi' ? `ऐप परिचय का चरण ${tour.stepIndex + 1} में से ${tour.total}` : `Guided tour step ${tour.stepIndex + 1} of ${tour.total}`}
         className="animate-fade-in-up"
         style={{
           position: 'fixed', top: cardTop, left: cardLeft, width: cardW, zIndex: 1001,
@@ -111,10 +112,10 @@ export default function TourOverlay() {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--teal-600)', fontFamily: 'var(--font-mono)' }}>
-            Step {tour.stepIndex + 1} of {tour.total}
+            {t('Step')} {tour.stepIndex + 1} {t('of')} {tour.total}
           </span>
-          <button onClick={tour.skip} aria-label="Skip tour" className="glow-btn-ghost" style={{ color: 'var(--ink-muted)', fontSize: '0.74rem', padding: 0 }}>
-            <X size={13} /> Skip tour
+          <button onClick={tour.skip} aria-label={t('Skip tour')} className="glow-btn-ghost" style={{ color: 'var(--ink-muted)', fontSize: '0.74rem', padding: 0 }}>
+            <X size={13} /> {t('Skip tour')}
           </button>
         </div>
 
@@ -125,15 +126,15 @@ export default function TourOverlay() {
           ))}
         </div>
 
-        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-strong)', marginBottom: '0.35rem' }}>{step.title}</h3>
-        <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', lineHeight: 1.5, margin: 0 }}>{step.body}</p>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-strong)', marginBottom: '0.35rem' }}>{t(step.title)}</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', lineHeight: 1.5, margin: 0 }}>{t(step.body)}</p>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginTop: '1rem' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem', color: 'var(--ink-muted)', fontFamily: 'var(--font-mono)', minHeight: '18px' }}>
-            {tour.running && (<><Cpu size={12} style={{ animation: 'spin 2s linear infinite' }} /> agent working…</>)}
+            {tour.running && (<><Cpu size={12} style={{ animation: 'spin 2s linear infinite' }} /> {t('agent working…')}</>)}
           </span>
           <button onClick={tour.next} disabled={tour.running} className="glow-btn-primary" style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem', opacity: tour.running ? 0.6 : 1 }}>
-            {tour.isLast ? (<><Flag size={14} /> Finish</>) : (<>Next <ChevronRight size={15} /></>)}
+            {tour.isLast ? <><Flag size={14} /> {t('Finish')}</> : <>{t('Next')} <ChevronRight size={15} /></>}
           </button>
         </div>
       </div>

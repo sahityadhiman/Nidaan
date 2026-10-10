@@ -1,5 +1,6 @@
 import React from 'react';
 import { Camera, Search, Send, Wrench, ShieldCheck, IndianRupee, RefreshCw, Check } from 'lucide-react';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 /*
   Loop Pipeline — the 5-second explainer.
@@ -33,6 +34,7 @@ export function issueProgress(issue) {
 }
 
 function NodeChip({ stage, state, count, vertical }) {
+  const { t } = useLanguage();
   const Icon = stage.icon;
   const isDone = state === 'done';
   const isActive = state === 'active';
@@ -72,7 +74,7 @@ function NodeChip({ stage, state, count, vertical }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: vertical ? 'flex-start' : 'center', lineHeight: 1.1 }}>
         <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isActive ? 'var(--ink-strong)' : 'var(--ink-muted)', fontFamily: 'var(--font-display)' }}>
-          {stage.label}
+          {t(stage.label)}
         </span>
         {count !== undefined && (
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: vertical ? '0.7rem' : '0.95rem', fontWeight: 700, color: isDone ? 'var(--grass-600)' : isActive ? 'var(--teal-600)' : 'var(--ink-muted)', fontVariantNumeric: 'tabular-nums' }}>

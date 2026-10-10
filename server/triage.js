@@ -37,36 +37,44 @@ async function fetchImageAsInline(url) {
 }
 
 // Heuristic fallback used when Gemini is unavailable.
-function heuristicTriage(hint = '') {
+function heuristicTriage(hint = '', language = 'en') {
   const t = hint.toLowerCase();
   let category = 'pothole';
-  if (/fire|flame|blaze|burning|smoke/.test(t)) category = 'fire';
-  else if (/pothole|crack/.test(t)) category = 'pothole';
-  else if (/water|pipe|leak|burst|flood/.test(t)) category = 'water_leak';
-  else if (/wire|electric|spark|cable|pole|transformer/.test(t)) category = 'wiring';
-  else if (/garbage|trash|litter|waste/.test(t)) category = 'garbage';
-  else if (/drain|sewage|sewer|overflow/.test(t)) category = 'drainage';
-  else if (/debris|rubble|construction|sand/.test(t)) category = 'debris';
-  else if (/light|lamp|sign|signal/.test(t)) category = 'road_sign';
-  else if (/road|asphalt/.test(t)) category = 'pothole';
+  if (/fire|flame|blaze|burning|smoke|आग|धुआँ|धुआं/.test(t)) category = 'fire';
+  else if (/wire|electric|spark|cable|pole|transformer|तार|बिजली|चिंगारी|खंभा/.test(t)) category = 'wiring';
+  else if (/pothole|crack|गड्ढा|दरार/.test(t)) category = 'pothole';
+  else if (/garbage|trash|litter|waste|कचरा|गंदगी/.test(t)) category = 'garbage';
+  else if (/debris|rubble|construction|sand|मलबा|निर्माण/.test(t)) category = 'debris';
+  else if (/pipe|pipeline|water main|leak|burst|पाइप|रिसाव|फट|फूटा|फटी/.test(t)) category = 'water_leak';
+  else if (/drain|sewage|sewer|overflow|flood|flooded|water-logged|waterlogged|standing water|जलभराव|बाढ़|नाली|सीवर|पानी भर|सड़क पर पानी/.test(t)) category = 'drainage';
+  else if (/water|पानी|बह रहा/.test(t)) category = 'water_leak';
+  else if (/light|lamp|sign|signal|बत्ती|लाइट|संकेत/.test(t)) category = 'road_sign';
+  else if (/road|asphalt|सड़क|रास्ता/.test(t)) category = 'pothole';
 
   let severity = 'medium';
-  if (/spark|live wire|gas|downed|fire|flood/.test(t)) severity = 'RedAlert';
-  else if (/burst|gushing|deep|major|dangerous|hazard/.test(t)) severity = 'high';
+  if (/spark|live wire|gas|downed|fire|flood|wire.*down|चिंगारी|खुली तार|तार.*(गिर|टूट)|गिर.*तार|बिजली.*तार|गैस|आग|बाढ़|जलभराव|पानी भर/.test(t)) severity = 'RedAlert';
+  else if (/burst|gushing|deep|major|dangerous|hazard|खतरनाक|गहरा|बड़ा|फट|फूटा|फटी|टूटी/.test(t)) severity = 'high';
+
+  const hindiLabels = {
+    pothole: 'सड़क का गड्ढा', road_sign: 'सड़क की लाइट या साइन', water_leak: 'पानी की पाइप में रिसाव',
+    drainage: 'जलभराव या नाली की समस्या', wiring: 'गिरी हुई बिजली की तार', garbage: 'कचरे की समस्या',
+    debris: 'निर्माण का मलबा', fire: 'आग लगने की शिकायत',
+  };
+  const title = language === 'hi' ? hindiLabels[category] : category.replace('_', ' ');
 
   return {
     category,
     severity,
-    title: `${category.replace('_', ' ')} reported`,
-    description: hint || `Auto-classified ${category.replace('_', ' ')} from the submitted photo.`,
+    title: language === 'hi' ? title : `${title} reported`,
+    description: hint || (language === 'hi' ? `${title} की सूचना दी गई।` : `Auto-classified ${category.replace('_', ' ')} from the submitted photo.`),
     suggestedDept: DEPT_BY_CATEGORY[category],
     confidence: 0.62,
     source: 'heuristic',
   };
 }
 
-function coerce(raw, hint) {
-  const fallback = heuristicTriage(hint);
+function coerce(raw, hint, language) {
+  const fallback = heuristicTriage(hint, language);
   if (!raw || typeof raw !== 'object') return fallback;
   const category = VALID_CATEGORIES.includes(raw.category) ? raw.category : fallback.category;
   const severity = VALID_SEVERITIES.includes(raw.severity) ? raw.severity : fallback.severity;
@@ -81,8 +89,8 @@ function coerce(raw, hint) {
   };
 }
 
-export async function triagePhoto({ photoUrl, photoBase64, mimeType, hint } = {}) {
-  if (!ai) return heuristicTriage(hint);
+export async function triagePhoto({ photoUrl, photoBase64, mimeType, hint, language = 'en' } = {}) {
+  if (!ai) return heuristicTriage(hint, language);
 
   try {
     const model = ai.getGenerativeModel({
@@ -104,6 +112,7 @@ Return STRICT JSON only with keys:
  "description": one factual sentence a citizen would file,
  "suggestedDept": the responsible municipal department,
  "confidence": 0..1}
+${language === 'hi' ? 'Write title and description in simple Hindi using Devanagari. Keep category, severity, and suggestedDept in the required canonical values.' : 'Write title and description in English.'}
 ${hint ? `Citizen note: "${hint}".` : ''}`;
 
     const parts = [{ text: instruction }];
@@ -114,10 +123,10 @@ ${hint ? `Citizen note: "${hint}".` : ''}`;
     let parsed;
     try { parsed = JSON.parse(text); }
     catch { parsed = JSON.parse((text.match(/\{[\s\S]*\}/) || ['{}'])[0]); }
-    return coerce(parsed, hint);
+    return coerce(parsed, hint, language);
   } catch (err) {
     console.error('Gemini triage failed, using heuristic fallback:', err.message);
-    return heuristicTriage(hint);
+    return heuristicTriage(hint, language);
   }
 }
 

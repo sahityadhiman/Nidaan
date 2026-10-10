@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppDataProvider } from './app/AppDataContext.jsx';
 import { RoleProvider, useRole } from './app/RoleContext.jsx';
+import { LanguageProvider } from './app/LanguageContext.jsx';
 import { TourProvider } from './tour/TourContext.jsx';
 import TourOverlay from './tour/TourOverlay.jsx';
 import RoleSelect from './screens/RoleSelect.jsx';
@@ -24,11 +25,13 @@ function Router() {
 export default function App() {
   return (
     <AppDataProvider>
-      <RoleProvider>
-        <TourProvider>
-          <Router />
-        </TourProvider>
-      </RoleProvider>
+      <LanguageProvider>
+        <RoleProvider>
+          <TourProvider>
+            <Router />
+          </TourProvider>
+        </RoleProvider>
+      </LanguageProvider>
     </AppDataProvider>
   );
 }

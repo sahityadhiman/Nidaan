@@ -7,6 +7,8 @@ import { sectionsFor, sectionMeta, roleById } from '../config/nav.js';
 import { sectionComponent } from './sections/registry.js';
 import SectionHeader from '../ui/SectionHeader.jsx';
 import RoleSwitcher from '../ui/RoleSwitcher.jsx';
+import LanguageToggle from '../ui/LanguageToggle.jsx';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 /*
   SCREEN 2 — Role Workspace. A thin glass top bar (brand, pill section nav, tour,
@@ -17,6 +19,7 @@ export default function Workspace() {
   const { role, section, setSection, goToRoleSelect } = useRole();
   const { loading, toast } = useAppData();
   const tour = useTour();
+  const { t: translate } = useLanguage();
 
   const [scrolled, setScrolled] = React.useState(false);
 
@@ -60,7 +63,7 @@ export default function Workspace() {
         transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
       }}>
         {/* Left Block: Logo & Brand Name only */}
-        <button onClick={goToRoleSelect} className="header-brand-block" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: '#ffffff', flexShrink: 0 }} title="Back to role select">
+        <button onClick={goToRoleSelect} className="header-brand-block" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: '#ffffff', flexShrink: 0 }} title={translate('Back to Role Select')}>
           <img src="/logo.png" alt="Nidaan" width={42} height={42} style={{ borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.12), 0 0 0 1.5px rgba(255,255,255,0.9)' }} />
           <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.035em', fontFamily: 'var(--font-display)' }}>Nidaan</span>
         </button>
@@ -109,7 +112,7 @@ export default function Workspace() {
                     }
                   }}
                 >
-                  <Icon size={14} /> {t.label}
+                  <Icon size={14} /> {translate(t.label)}
                 </button>
               );
             })}
@@ -117,13 +120,15 @@ export default function Workspace() {
 
           {/* Integrated hint text directly below navigation tabs in the center */}
           <span className="header-nav-hint" style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.75)', fontWeight: 500, textAlign: 'center' }}>
-            Hover (or tap) the ⓘ to learn about the feature
+            {translate('Hover (or tap) the ⓘ to learn about the feature')}
           </span>
 
         </div>
 
         {/* Right Block: Stacked Role name (top) and Guided Tour (bottom) */}
         <div className="header-actions-block" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
+
+          <LanguageToggle dark />
 
           {/* Role switcher dropdown trigger on top */}
           <RoleSwitcher />
@@ -152,7 +157,7 @@ export default function Workspace() {
             }}
           >
             <Play size={10} fill="currentColor" />
-            <span className="tour-button-text"> Guided Tour</span>
+            <span className="tour-button-text"> {translate('Guided Tour')}</span>
           </button>
         </div>
       </header>
@@ -166,14 +171,14 @@ export default function Workspace() {
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', gap: '1rem' }}>
             <div className="pulsing-indicator" style={{ width: '20px', height: '20px' }} />
-            <p style={{ fontSize: '0.9rem', color: 'var(--ink-muted)' }}>Establishing Nidaan connection…</p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--ink-muted)' }}>{translate('Establishing Nidaan connection…')}</p>
           </div>
         ) : (
           <div key={`${role}/${section}`} className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}>
             {meta && (
-              <SectionHeader icon={meta.icon} title={meta.label} info={meta.info} tag={meta.tag} hint={meta.hint} eyebrow={roleDef?.name} />
+              <SectionHeader icon={meta.icon} title={translate(meta.label)} info={translate(meta.info)} tag={translate(meta.tag)} hint={translate(meta.hint)} eyebrow={translate(roleDef?.name)} />
             )}
-            {SectionView ? <SectionView /> : <p style={{ color: 'var(--ink-muted)' }}>Section not found.</p>}
+            {SectionView ? <SectionView /> : <p style={{ color: 'var(--ink-muted)' }}>{translate('Section not found.')}</p>}
           </div>
         )}
       </main>

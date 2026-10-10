@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link2, ShieldCheck, ShieldAlert, Hash } from 'lucide-react';
+import { useLanguage } from '../app/LanguageContext.jsx';
 
 /*
   GlassLedger 6c — tamper-evident ledger timeline.
@@ -7,6 +8,7 @@ import { Link2, ShieldCheck, ShieldAlert, Hash } from 'lucide-react';
   hash) and verifies it against the backend on demand.
 */
 export default function LedgerTimeline({ issue }) {
+  const { t, language } = useLanguage();
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const trail = issue?.ledgerTrail || [];
@@ -28,17 +30,19 @@ export default function LedgerTimeline({ issue }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <Link2 size={15} color="var(--teal)" />
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-strong)', fontFamily: 'var(--font-display)' }}>Tamper-evident ledger</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-strong)', fontFamily: 'var(--font-display)' }}>{t('Tamper-evident ledger')}</span>
         </div>
         <button onClick={verify} disabled={busy} className="glow-btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}>
-          {busy ? 'Verifying…' : 'Verify chain'}
+          {busy ? t('Verifying…') : t('Verify chain')}
         </button>
       </div>
 
       {result && (
         <div className={`badge ${result.valid ? 'badge-success' : 'badge-danger'}`} style={{ alignSelf: 'flex-start' }}>
           {result.valid ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
-          {result.valid ? `Chain intact · ${result.length} blocks` : `Tampered at block ${result.brokenAt} (${result.reason})`}
+          {result.valid
+            ? (language === 'hi' ? `श्रृंखला सही है · ${result.length} रिकॉर्ड` : `Chain intact · ${result.length} blocks`)
+            : (language === 'hi' ? `रिकॉर्ड ${result.brokenAt} पर बदलाव मिला (${result.reason})` : `Tampered at block ${result.brokenAt} (${result.reason})`)}
         </div>
       )}
 
